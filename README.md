@@ -61,7 +61,12 @@ Acesse `http://localhost:4000` (site), `http://localhost:4000/painel.html`
    git remote add origin <url-do-seu-repositorio>
    git push -u origin main
    ```
-2. **Banco de dados**: no Render, New → PostgreSQL. Copie a "Internal Database URL".
+2. **Banco de dados (Supabase)**: crie um projeto em [supabase.com](https://supabase.com),
+   defina uma senha forte para o banco, depois vá em **Connect → Session pooler**
+   e copie a connection string (porta 5432 — use o "Session pooler", não o
+   "Transaction pooler", já que o Render mantém o servidor rodando o tempo
+   todo, diferente de funções serverless). Substitua `[PASSWORD]` pela senha
+   que você definiu.
 3. **Web Service**: New → Web Service → conecte o repositório do GitHub.
    - Build Command: `npm install`
    - Start Command: `npm start`
@@ -86,8 +91,10 @@ Acesse `http://localhost:4000` (site), `http://localhost:4000/painel.html`
    `https://seu-servico.onrender.com/painel.html` (painel). No painel, vá em
    **Configurações → Conexão com o Backend** e clique em
    **"Usar este mesmo domínio"** — pronto, painel e site conectados à API.
-8. (Opcional) `render.yaml` (Dashboard → New → Blueprint) automatiza os
-   passos 2–4.
+8. (Opcional) `render.yaml` (Dashboard → New → Blueprint) cria o Web Service
+   já configurado (menos `DATABASE_URL`, `ALLOWED_ORIGINS` e as credenciais,
+   que o blueprint deixa em branco para você preencher manualmente por
+   segurança — ele não cria um banco no Render, já que o banco é o Supabase).
 
 ⚠️ **O plano gratuito do Render "dorme" o serviço após um tempo sem uso** — a
 primeira requisição depois disso demora alguns segundos para acordar. Normal,

@@ -1,12 +1,11 @@
 # Blueprint opcional do Render (Render > New > Blueprint).
 # Você também pode simplesmente criar o Web Service manualmente pelo dashboard
-# seguindo o README.md — o blueprint só automatiza esses mesmos passos.
-
-databases:
-  - name: wm-moveis-db
-    plan: free
-    databaseName: wm_moveis
-    user: wm_admin
+# seguindo o README.md — o blueprint só automatiza esse processo.
+#
+# O banco de dados usado é o SUPABASE (não o Postgres do Render), por isso
+# não há uma seção "databases:" aqui — DATABASE_URL é preenchida manualmente
+# por você no dashboard do Render com a "Session pooler connection string"
+# do seu projeto Supabase (Project > Connect > Session pooler).
 
 services:
   - type: web
@@ -20,9 +19,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        fromDatabase:
-          name: wm-moveis-db
-          property: connectionString
+        sync: false   # cole aqui a Session pooler connection string do Supabase
       - key: DATABASE_SSL
         value: "true"
       - key: JWT_SECRET
