@@ -1,0 +1,45 @@
+# Blueprint opcional do Render (Render > New > Blueprint).
+# Você também pode simplesmente criar o Web Service manualmente pelo dashboard
+# seguindo o README.md — o blueprint só automatiza esses mesmos passos.
+
+databases:
+  - name: wm-moveis-db
+    plan: free
+    databaseName: wm_moveis
+    user: wm_admin
+
+services:
+  - type: web
+    name: wm-moveis-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: wm-moveis-db
+          property: connectionString
+      - key: DATABASE_SSL
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
