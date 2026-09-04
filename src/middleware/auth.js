@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { query } = require('../config/db');
 
 const COOKIE_NAME = 'wm_session';
 
@@ -24,19 +25,53 @@ function clearSessionCookie(res) {
   res.clearCookie(COOKIE_NAME, { path: '/' });
 }
 
-/** Exige um token de sessão válido. Anexa req.admin = { id, email }. */
-function requireAuth(req, res, next) {
+/** Exige um token de sessão válido. Busca as permissões ATUAIS no banco (não
+ *  confia só no que estava no token) — assim, se um admin tiver o acesso
+ *  revogado ou a conta excluída, isso vale imediatamente na próxima
+ *  requisição, sem esperar o token expirar ou a pessoa deslogar.
+ *  Anexa req.admin = { id, email, is_super, can_products, can_reports }. */
+async function requireAuth(req, res, next) {
   const token = req.cookies?.[COOKIE_NAME];
   if (!token) {
     return res.status(401).json({ error: 'Não autenticado.' });
   }
+  let payload;
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
-    req.admin = { id: payload.sub, email: payload.email };
-    next();
+    payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
   } catch (err) {
     return res.status(401).json({ error: 'Sessão inválida ou expirada. Faça login novamente.' });
   }
+  try {
+    const { rows } = await query(
+      'SELECT id, email, is_super, can_products, can_reports FROM admins WHERE id = $1',
+      [payload.sub]
+    );
+    if (!rows.length) {
+      return res.status(401).json({ error: 'Sessão inválida. Faça login novamente.' });
+    }
+    req.admin = rows[0];
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
-module.exports = { COOKIE_NAME, signToken, setSessionCookie, clearSessionCookie, requireAuth };
+/** Exige que o admin autenticado seja "super" (gerencia outras contas). */
+function requireSuper(req, res, next) {
+  if (req.admin && req.admin.is_super) return next();
+  return res.status(403).json({ error: 'Apenas um administrador principal pode fazer isso.' });
+}
+
+/** Exige uma permissão específica (ex: 'can_products', 'can_reports').
+ *  Admins "super" sempre passam, independente das flags individuais. */
+function requirePermission(perm) {
+  return (req, res, next) => {
+    if (req.admin && (req.admin.is_super || req.admin[perm])) return next();
+    return res.status(403).json({ error: 'Você não tem permissão para acessar este recurso.' });
+  };
+}
+
+module.exports = {
+  COOKIE_NAME, signToken, setSessionCookie, clearSessionCookie,
+  requireAuth, requireSuper, requirePermission
+};

@@ -109,6 +109,12 @@ async function apiAdminDeleteProduct(id) { return apiFetch('/api/admin/products/
 /* ---------------- Admin: banner ---------------- */
 async function apiAdminUpdateBanner(payload) { return apiFetch('/api/admin/hero-banner', { method: 'PUT', body: payload }); }
 
+/* ---------------- Admin: contas de administrador (só quem é "super") ---------------- */
+async function apiAdminListAdmins() { return apiFetch('/api/admin/admins'); }
+async function apiAdminCreateAdmin(payload) { return apiFetch('/api/admin/admins', { method: 'POST', body: payload }); }
+async function apiAdminUpdateAdmin(id, payload) { return apiFetch('/api/admin/admins/' + encodeURIComponent(id), { method: 'PUT', body: payload }); }
+async function apiAdminDeleteAdmin(id) { return apiFetch('/api/admin/admins/' + encodeURIComponent(id), { method: 'DELETE' }); }
+
 /* ---------------- Admin: upload de imagens ---------------- */
 async function apiAdminUpload(files) {
   const form = new FormData();

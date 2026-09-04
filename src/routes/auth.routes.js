@@ -5,7 +5,7 @@ const { query } = require('../config/db');
 const { validate } = require('../middleware/validate');
 const { loginLimiter } = require('../middleware/rateLimiters');
 const { signToken, setSessionCookie, clearSessionCookie, requireAuth } = require('../middleware/auth');
-const { issueCsrfToken } = require('../middleware/csrf');
+const { issueCsrfToken, requireCsrf } = require('../middleware/csrf');
 
 const router = express.Router();
 
@@ -49,7 +49,7 @@ router.post(
         });
       }
 
-      const { rows } = await query('SELECT id, email, password_hash FROM admins WHERE email = $1', [email]);
+      const { rows } = await query('SELECT id, email, password_hash, is_super, can_products, can_reports FROM admins WHERE email = $1', [email]);
       const admin = rows[0];
 
       // Mensagem genérica proposital: não revela se o e-mail existe ou não (evita enumeração de contas).
@@ -72,7 +72,17 @@ router.post(
       const token = signToken(admin);
       setSessionCookie(res, token);
       issueCsrfToken(req, res, () => {
-        res.json({ ok: true, admin: { id: admin.id, email: admin.email }, csrfToken: res.locals.csrfToken });
+        res.json({
+          ok: true,
+          admin: {
+            id: admin.id,
+            email: admin.email,
+            is_super: admin.is_super,
+            can_products: admin.can_products,
+            can_reports: admin.can_reports
+          },
+          csrfToken: res.locals.csrfToken
+        });
       });
     } catch (err) {
       next(err);

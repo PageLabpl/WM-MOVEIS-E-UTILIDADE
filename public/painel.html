@@ -196,6 +196,7 @@
     <div class="group-label">Site</div>
     <a class="nav-link" data-view="frete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="6" width="15" height="12" rx="2"/><path d="M16 10h4l3 3v3h-7z"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/></svg>Frete</a>
     <a class="nav-link" data-view="config"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Configurações</a>
+    <a class="nav-link" data-view="admins" id="nav-admins-link" style="display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>Administradores</a>
 
     <div class="back-site">
       <a href="index.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Ver site</a>
@@ -746,6 +747,40 @@
         </div>
       </div>
     </section>
+
+    <!-- ========== ADMINISTRADORES (só aparece para quem é "super") ========== -->
+    <section class="view" id="view-admins">
+      <div class="panel">
+        <div class="panel-head"><h2>Contas de administrador</h2></div>
+        <p class="note" style="margin-bottom:14px;">
+          Crie uma conta para cada pessoa da equipe e escolha o que cada uma pode acessar.
+          Contas com <b>acesso total</b> podem gerenciar outras contas de administrador.
+        </p>
+
+        <div id="admins-list" style="margin-bottom:20px;"></div>
+
+        <div class="panel-head"><h3 style="margin:0;">Nova conta</h3></div>
+        <div class="form-grid">
+          <label><b>E-mail</b><input type="email" id="newadmin-email" placeholder="pessoa@wmoveis.com.br"></label>
+          <label><b>Senha</b><input type="password" id="newadmin-password" placeholder="mínimo 10 caracteres" autocomplete="new-password"></label>
+        </div>
+        <div class="btn-row" style="margin:10px 0;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;">
+            <input type="checkbox" id="newadmin-products" checked> Acesso a Produtos
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;">
+            <input type="checkbox" id="newadmin-reports"> Acesso a Relatórios/dados internos
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;">
+            <input type="checkbox" id="newadmin-super"> Acesso total (super — pode gerenciar outros admins)
+          </label>
+        </div>
+        <div class="btn-row">
+          <button class="btn" onclick="criarNovoAdmin()">Criar conta</button>
+        </div>
+        <div id="admins-msg" style="margin-top:10px; font-size:13px;"></div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -803,7 +838,44 @@ if(!load('wm_admin_user', null)){
   localStorage.setItem('wm_admin_user', JSON.stringify({email:'admin@wmoveis.com.br', password:'wm123456'}));
 }
 
+let currentAdmin = null; // { id, email, is_super, can_products, can_reports } — só preenchido em modo backend
+
 function isApiMode(){ return !!getApiBaseUrl(); }
+
+/** Mostra/esconde abas do menu de acordo com as permissões do admin logado.
+ *  Em modo local (sem backend) ninguém tem restrição — é só para demonstração. */
+function applyPermissions(){
+  const navProdutos = document.querySelector('[data-view="produtos"]');
+  const navRelatorios = document.querySelector('[data-view="relatorios"]');
+  const navRelClientes = document.querySelector('[data-view="relclientes"]');
+  const navAdmins = document.getElementById('nav-admins-link');
+
+  if(!isApiMode() || !currentAdmin){
+    // modo local/demo: libera tudo, sem aba de administradores
+    [navProdutos, navRelatorios, navRelClientes].forEach(el => { if(el) el.style.display = ''; });
+    if(navAdmins) navAdmins.style.display = 'none';
+    return;
+  }
+
+  const canProducts = currentAdmin.is_super || !!currentAdmin.can_products;
+  const canReports  = currentAdmin.is_super || !!currentAdmin.can_reports;
+
+  if(navProdutos) navProdutos.style.display = canProducts ? '' : 'none';
+  if(navRelatorios) navRelatorios.style.display = canReports ? '' : 'none';
+  if(navRelClientes) navRelClientes.style.display = canReports ? '' : 'none';
+  if(navAdmins) navAdmins.style.display = currentAdmin.is_super ? '' : 'none';
+
+  // Se a pessoa estiver numa view à qual perdeu acesso, manda de volta pro Painel.
+  const activeView = document.querySelector('.view.active');
+  if(activeView){
+    const id = activeView.id;
+    if((id === 'view-produtos' && !canProducts) ||
+       ((id === 'view-relatorios' || id === 'view-relclientes') && !canReports) ||
+       (id === 'view-admins' && !currentAdmin.is_super)){
+      document.querySelector('[data-view="painel"]').click();
+    }
+  }
+}
 
 async function doLogin(){
   const email = document.getElementById('login-email').value.trim();
@@ -813,11 +885,12 @@ async function doLogin(){
 
   if(isApiMode()){
     try{
-      await apiLogin(email, pass);
+      currentAdmin = await apiLogin(email, pass);
       sessionStorage.setItem('wm_logged_in','1');
       sessionStorage.setItem('wm_auth_mode','api');
       await syncFromApi();
       boot();
+      applyPermissions();
     }catch(err){
       errEl.textContent = err.message || 'E-mail ou senha incorretos.';
       errEl.style.display = 'block';
@@ -828,6 +901,7 @@ async function doLogin(){
       sessionStorage.setItem('wm_logged_in','1');
       sessionStorage.setItem('wm_auth_mode','local');
       boot();
+      applyPermissions();
     } else {
       errEl.textContent = 'E-mail ou senha incorretos.';
       errEl.style.display = 'block';
@@ -891,10 +965,11 @@ function toApiProductPayload(prod){
 (async function tryAutoBoot(){
   if(sessionStorage.getItem('wm_logged_in') !== '1') return;
   if(sessionStorage.getItem('wm_auth_mode') === 'api'){
-    try{ await apiMe(); await syncFromApi(); boot(); }
+    try{ currentAdmin = await apiMe(); await syncFromApi(); boot(); applyPermissions(); }
     catch(err){ sessionStorage.removeItem('wm_logged_in'); sessionStorage.removeItem('wm_auth_mode'); }
   } else {
     boot();
+    applyPermissions();
   }
 })();
 
@@ -1392,6 +1467,93 @@ function initBackendPanel(){
   document.getElementById('cfg-api-url').value = url;
   if(url) renderBackendStatus('ok', 'Configurado: ' + url);
   else renderBackendStatus('off', 'Modo local — nenhum backend conectado.');
+}
+
+/* ============ Administradores (só quem é super) ============ */
+let _adminsCache = [];
+
+async function renderAdminsView(){
+  const view = document.getElementById('view-admins');
+  if(!view || !view.classList.contains('active')) return;
+  if(!isApiMode() || !currentAdmin || !currentAdmin.is_super) return;
+
+  const list = document.getElementById('admins-list');
+  list.innerHTML = '<p class="note">Carregando...</p>';
+  try{
+    _adminsCache = await apiAdminListAdmins();
+    list.innerHTML = _adminsCache.map(a => `
+      <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;">
+        <div style="flex:1;min-width:180px;">
+          <b>${a.email}</b>${a.id === currentAdmin.id ? ' <span class="note">(você)</span>' : ''}
+          <div class="note" style="font-size:11.5px;">Criado em ${new Date(a.created_at).toLocaleDateString('pt-BR')}</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+          <input type="checkbox" ${a.can_products?'checked':''} ${a.is_super?'disabled':''}
+                 onchange="alterarPermissaoAdmin('${a.id}','canProducts',this.checked)"> Produtos
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+          <input type="checkbox" ${a.can_reports?'checked':''} ${a.is_super?'disabled':''}
+                 onchange="alterarPermissaoAdmin('${a.id}','canReports',this.checked)"> Relatórios
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+          <input type="checkbox" ${a.is_super?'checked':''}
+                 onchange="alterarPermissaoAdmin('${a.id}','isSuper',this.checked)"> Super
+        </label>
+        ${a.id === currentAdmin.id ? '' : `<button class="btn" style="padding:6px 12px;" onclick="excluirAdmin('${a.id}','${a.email}')">Excluir</button>`}
+      </div>
+    `).join('') || '<p class="note">Nenhum admin encontrado.</p>';
+  }catch(err){
+    list.innerHTML = `<p class="note" style="color:#e33;">Erro ao carregar: ${err.message}</p>`;
+  }
+}
+
+async function alterarPermissaoAdmin(id, campo, valor){
+  try{
+    await apiAdminUpdateAdmin(id, { [campo]: valor });
+    await renderAdminsView();
+  }catch(err){
+    alert(err.message || 'Não foi possível alterar a permissão.');
+    await renderAdminsView(); // desfaz visualmente o toggle em caso de erro
+  }
+}
+
+async function excluirAdmin(id, email){
+  if(!confirm(`Excluir a conta de ${email}? Essa ação não pode ser desfeita.`)) return;
+  try{
+    await apiAdminDeleteAdmin(id);
+    await renderAdminsView();
+  }catch(err){
+    alert(err.message || 'Não foi possível excluir essa conta.');
+  }
+}
+
+async function criarNovoAdmin(){
+  const email = document.getElementById('newadmin-email').value.trim();
+  const password = document.getElementById('newadmin-password').value;
+  const canProducts = document.getElementById('newadmin-products').checked;
+  const canReports = document.getElementById('newadmin-reports').checked;
+  const isSuper = document.getElementById('newadmin-super').checked;
+  const msgEl = document.getElementById('admins-msg');
+  msgEl.textContent = '';
+
+  if(!email || !password){
+    msgEl.style.color = '#e33';
+    msgEl.textContent = 'Preencha e-mail e senha.';
+    return;
+  }
+
+  try{
+    await apiAdminCreateAdmin({ email, password, canProducts, canReports, isSuper });
+    document.getElementById('newadmin-email').value = '';
+    document.getElementById('newadmin-password').value = '';
+    document.getElementById('newadmin-super').checked = false;
+    msgEl.style.color = '#2a2';
+    msgEl.textContent = 'Conta criada com sucesso.';
+    await renderAdminsView();
+  }catch(err){
+    msgEl.style.color = '#e33';
+    msgEl.textContent = err.message || 'Não foi possível criar a conta.';
+  }
 }
 
 async function saveCredentials(){
@@ -1959,6 +2121,7 @@ function renderAll(){
   renderRelClientes();
   renderMetas();
   renderFrete();
+  renderAdminsView();
 }
 function boot(){
   document.getElementById('login-screen').style.display='none';

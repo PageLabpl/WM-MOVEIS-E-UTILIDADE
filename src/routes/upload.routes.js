@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { requireCsrf } = require('../middleware/csrf');
 const { uploadLimiter } = require('../middleware/rateLimiters');
 const { upload, verifyRealImageType, MAX_FILES } = require('../middleware/upload');
@@ -10,6 +10,7 @@ const router = express.Router();
 router.post(
   '/admin/upload',
   requireAuth,
+  requirePermission('can_products'),
   requireCsrf,
   uploadLimiter,
   upload.array('images', MAX_FILES),

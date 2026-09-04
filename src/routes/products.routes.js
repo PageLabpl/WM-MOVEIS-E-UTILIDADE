@@ -1,11 +1,12 @@
 const express = require('express');
 const { body, param } = require('express-validator');
 const { validate } = require('../middleware/validate');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { requireCsrf } = require('../middleware/csrf');
 const ctrl = require('../controllers/products.controller');
 
 const router = express.Router();
+const requireProducts = requirePermission('can_products');
 
 const VALID_CATEGORIES = ['sala','quarto','cozinha','banheiro','escritorio','decoracao','utilidades','organizacao'];
 
@@ -35,10 +36,10 @@ router.get('/products', ctrl.listPublicProducts);
 router.get('/products/:id', idParamRule, validate, ctrl.getPublicProduct);
 router.get('/products/:id/related', idParamRule, validate, ctrl.getRelatedProducts);
 
-// ---- Rotas administrativas (autenticação + CSRF obrigatórios) ----
-router.get('/admin/products', requireAuth, ctrl.listAdminProducts);
-router.post('/admin/products', requireAuth, requireCsrf, productValidationRules, validate, ctrl.createProduct);
-router.put('/admin/products/:id', requireAuth, requireCsrf, [...idParamRule, ...productValidationRules], validate, ctrl.updateProduct);
-router.delete('/admin/products/:id', requireAuth, requireCsrf, idParamRule, validate, ctrl.deleteProduct);
+// ---- Rotas administrativas (autenticação + permissão de produtos + CSRF obrigatórios) ----
+router.get('/admin/products', requireAuth, requireProducts, ctrl.listAdminProducts);
+router.post('/admin/products', requireAuth, requireProducts, requireCsrf, productValidationRules, validate, ctrl.createProduct);
+router.put('/admin/products/:id', requireAuth, requireProducts, requireCsrf, [...idParamRule, ...productValidationRules], validate, ctrl.updateProduct);
+router.delete('/admin/products/:id', requireAuth, requireProducts, requireCsrf, idParamRule, validate, ctrl.deleteProduct);
 
 module.exports = router;

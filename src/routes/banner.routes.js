@@ -2,7 +2,7 @@ const express = require('express');
 const { body } = require('express-validator');
 const { query } = require('../config/db');
 const { validate } = require('../middleware/validate');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { requireCsrf } = require('../middleware/csrf');
 
 const router = express.Router();
@@ -17,6 +17,7 @@ router.get('/hero-banner', async (req, res, next) => {
 router.put(
   '/admin/hero-banner',
   requireAuth,
+  requirePermission('can_products'),
   requireCsrf,
   [
     body('image').optional({ nullable: true }).isString().isLength({ max: 3000 }),

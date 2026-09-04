@@ -3,10 +3,11 @@ const { param, body } = require('express-validator');
 const { query } = require('../config/db');
 const { ALLOWED_DATA_KEYS } = require('../config/allowedDataKeys');
 const { validate } = require('../middleware/validate');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requirePermission } = require('../middleware/auth');
 const { requireCsrf } = require('../middleware/csrf');
 
 const router = express.Router();
+const requireReports = requirePermission('can_reports');
 
 const keyParamRule = [
   param('key').isIn(ALLOWED_DATA_KEYS).withMessage('Chave de dados desconhecida.')
@@ -14,7 +15,7 @@ const keyParamRule = [
 
 /** GET /api/admin/data — retorna todas as chaves de uma vez (usado para
  *  sincronizar o cache local do painel logo após o login). */
-router.get('/admin/data', requireAuth, async (req, res, next) => {
+router.get('/admin/data', requireAuth, requireReports, async (req, res, next) => {
   try {
     const { rows } = await query(
       'SELECT key, value FROM app_data WHERE key = ANY($1::text[])',
@@ -27,7 +28,7 @@ router.get('/admin/data', requireAuth, async (req, res, next) => {
 });
 
 /** GET /api/admin/data/:key — retorna uma chave específica */
-router.get('/admin/data/:key', requireAuth, keyParamRule, validate, async (req, res, next) => {
+router.get('/admin/data/:key', requireAuth, requireReports, keyParamRule, validate, async (req, res, next) => {
   try {
     const { rows } = await query('SELECT value FROM app_data WHERE key = $1', [req.params.key]);
     res.json(rows.length ? rows[0].value : null);
@@ -41,6 +42,7 @@ router.get('/admin/data/:key', requireAuth, keyParamRule, validate, async (req, 
 router.put(
   '/admin/data/:key',
   requireAuth,
+  requireReports,
   requireCsrf,
   keyParamRule,
   body().custom((value) => {

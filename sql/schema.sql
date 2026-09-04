@@ -10,9 +10,23 @@ CREATE TABLE IF NOT EXISTS admins (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email         TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
+  is_super      BOOLEAN NOT NULL DEFAULT false,  -- pode gerenciar outras contas de admin
+  can_products  BOOLEAN NOT NULL DEFAULT true,   -- acesso à aba de Produtos (catálogo, banner, upload)
+  can_reports   BOOLEAN NOT NULL DEFAULT true,   -- acesso aos dados internos do negócio e relatórios
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_login_at TIMESTAMPTZ
 );
+-- Garante as colunas também em bancos que já tinham a tabela criada antes desta versão.
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_super BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS can_products BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS can_reports BOOLEAN NOT NULL DEFAULT true;
+
+-- Se o banco já tinha admins de antes desta versão (sem nenhum "super"),
+-- promove o mais antigo automaticamente — evita que o dono original do
+-- painel fique sem conseguir gerenciar as novas contas de equipe.
+UPDATE admins SET is_super = true, can_products = true, can_reports = true
+WHERE id = (SELECT id FROM admins ORDER BY created_at ASC LIMIT 1)
+  AND NOT EXISTS (SELECT 1 FROM admins WHERE is_super = true);
 
 CREATE TABLE IF NOT EXISTS login_attempts (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),

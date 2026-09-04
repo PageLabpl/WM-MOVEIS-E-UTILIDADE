@@ -40,8 +40,11 @@ async function main() {
       await pool.query('UPDATE admins SET password_hash = $1 WHERE email = $2', [passwordHash, email]);
       console.log(`✅ Senha atualizada para o admin existente: ${email}`);
     } else {
-      await pool.query('INSERT INTO admins (email, password_hash) VALUES ($1, $2)', [email, passwordHash]);
-      console.log(`✅ Administrador criado: ${email}`);
+      await pool.query(
+        'INSERT INTO admins (email, password_hash, is_super, can_products, can_reports) VALUES ($1, $2, true, true, true)',
+        [email, passwordHash]
+      );
+      console.log(`✅ Administrador criado: ${email} (super, com acesso total)`);
     }
   } catch (err) {
     console.error('❌ Erro:', err.message);
