@@ -14,7 +14,16 @@
 const API_URL_KEY = 'wm_api_url';
 
 function getApiBaseUrl() {
-  return (localStorage.getItem(API_URL_KEY) || '').replace(/\/+$/, '');
+  const stored = (localStorage.getItem(API_URL_KEY) || '').replace(/\/+$/, '');
+  if (stored) return stored;
+  // Nenhuma URL configurada manualmente: assume o mesmo domínio que serviu
+  // esta página. Como o site/painel e a API rodam no mesmo serviço no
+  // Render, isso já basta na grande maioria dos casos — sem precisar
+  // clicar em "Usar este mesmo domínio" em cada navegador/dispositivo,
+  // e sem depender de um valor salvo no localStorage (que some se os
+  // dados do site forem apagados).
+  if (location.protocol === 'http:' || location.protocol === 'https:') return location.origin;
+  return '';
 }
 function setApiBaseUrl(url) {
   localStorage.setItem(API_URL_KEY, (url || '').trim().replace(/\/+$/, ''));
@@ -80,6 +89,9 @@ async function apiMe() {
   const data = await apiFetch('/api/auth/me');
   _csrfToken = data.csrfToken;
   return data.admin;
+}
+async function apiChangePassword(currentPassword, newPassword) {
+  return apiFetch('/api/auth/password', { method: 'PUT', body: { currentPassword, newPassword } });
 }
 
 /* ---------------- Catálogo público ---------------- */

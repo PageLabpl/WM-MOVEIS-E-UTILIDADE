@@ -80,6 +80,42 @@ router.post(
   }
 );
 
+/** PUT /api/auth/password — troca a senha do admin autenticado.
+ *  Exige a senha atual (evita que uma sessão roubada troque a senha sem
+ *  saber a original) e grava só o novo hash bcrypt — nunca texto puro.
+ *  Ao gravar no banco, a mudança já vale para qualquer dispositivo/sessão
+ *  futura que fizer login, não só para o navegador onde foi trocada. */
+router.put(
+  '/password',
+  requireAuth,
+  requireCsrf,
+  [
+    body('currentPassword').isString().isLength({ min: 1, max: 200 }).withMessage('Senha atual obrigatória.'),
+    body('newPassword').isString().isLength({ min: 10, max: 200 }).withMessage('A nova senha deve ter pelo menos 10 caracteres.')
+  ],
+  validate,
+  async (req, res, next) => {
+    const { currentPassword, newPassword } = req.body;
+    try {
+      const { rows } = await query('SELECT id, password_hash FROM admins WHERE id = $1', [req.admin.id]);
+      const admin = rows[0];
+      if (!admin) {
+        return res.status(401).json({ error: 'Sessão inválida. Faça login novamente.' });
+      }
+
+      const currentOk = await bcrypt.compare(currentPassword, admin.password_hash);
+      if (!currentOk) {
+        return res.status(401).json({ error: 'Senha atual incorreta.' });
+      }
+
+      const newHash = await bcrypt.hash(newPassword, 12);
+      await query('UPDATE admins SET password_hash = $1 WHERE id = $2', [newHash, admin.id]);
+
+      res.json({ ok: true });
+    } catch (err) { next(err); }
+  }
+);
+
 router.post('/logout', (req, res) => {
   clearSessionCookie(res);
   res.clearCookie('wm_csrf', { path: '/' });

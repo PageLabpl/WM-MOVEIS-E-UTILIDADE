@@ -728,7 +728,8 @@
         <div class="panel-head"><h2>Acesso ao painel</h2></div>
         <div class="form-grid">
           <label><b>E-mail</b><input type="email" id="cfg-email"></label>
-          <label><b>Nova senha</b><input type="password" id="cfg-senha" placeholder="Deixe em branco para não alterar"></label>
+          <label><b>Senha atual</b><input type="password" id="cfg-senha-atual" placeholder="Necessária para confirmar a troca" autocomplete="current-password"></label>
+          <label><b>Nova senha</b><input type="password" id="cfg-senha" placeholder="Deixe em branco para não alterar" autocomplete="new-password"></label>
         </div>
         <div class="btn-row"><button class="btn" onclick="saveCredentials()">Salvar acesso</button></div>
       </div>
@@ -1294,7 +1295,7 @@ function renderReports(){
 }
 
 /* ============ Banners (config) ============ */
-const bannerNames = ['hero','service'];
+var bannerNames = ['hero','service'];
 let pendingImage = {hero:null, service:null};
 function loadBannerForm(name){
   const data = load('wm_'+name+'_banner', null);
@@ -1393,11 +1394,33 @@ function initBackendPanel(){
   else renderBackendStatus('off', 'Modo local — nenhum backend conectado.');
 }
 
-function saveCredentials(){
+async function saveCredentials(){
   if(isApiMode()){
-    alert('Em modo backend, a senha do administrador é gerenciada pelo servidor.\n\nPara trocar, rode no terminal do Render (ou local, conectado ao banco):\n\n  npm run seed:admin\n\n(usando o e-mail e a nova senha desejados). Isso é mais seguro que trocar a senha por aqui.');
+    const senhaAtual = document.getElementById('cfg-senha-atual').value;
+    const novaSenha = document.getElementById('cfg-senha').value;
+
+    if(!novaSenha){
+      alert('Digite a nova senha que deseja usar.');
+      return;
+    }
+    if(!senhaAtual){
+      alert('Digite sua senha atual para confirmar a troca.');
+      return;
+    }
+
+    try{
+      await apiChangePassword(senhaAtual, novaSenha);
+      document.getElementById('cfg-senha-atual').value = '';
+      document.getElementById('cfg-senha').value = '';
+      alert('Senha atualizada com sucesso! A partir de agora, use a nova senha para entrar em qualquer dispositivo.');
+    }catch(err){
+      alert(err.message || 'Não foi possível trocar a senha. Tente novamente.');
+    }
     return;
   }
+
+  // Modo local (sem backend conectado) — mantém o comportamento antigo,
+  // salvando só neste navegador (uso apenas para testes/demonstração).
   const email = document.getElementById('cfg-email').value.trim();
   const senha = document.getElementById('cfg-senha').value;
   const user = load('wm_admin_user', {});
@@ -1405,7 +1428,7 @@ function saveCredentials(){
   if(senha) user.password = senha;
   save('wm_admin_user', user);
   document.getElementById('cfg-senha').value='';
-  alert('Dados de acesso atualizados.');
+  alert('Dados de acesso atualizados (modo local — apenas este navegador).');
 }
 
 /* ============ Movimentar estoque ============ */
