@@ -75,8 +75,20 @@ app.use('/api', dataRoutes);
 // mesmo serviço/domínio da API. Isso elimina a necessidade de CORS entre
 // front-end e back-end (mesma origem) e simplifica o deploy: um único
 // serviço no Render serve tudo. Basta colocar os arquivos HTML/JS em /public.
+//
+// setHeaders com Cache-Control: no-cache força o navegador (ou qualquer
+// pré-carregamento feito por apps como WhatsApp/Instagram) a sempre
+// revalidar com o servidor antes de usar uma cópia salva — evita que uma
+// atualização de código (ex: correção de bug, nova rota) fique "presa"
+// em cache antigo em algum dispositivo.
 const path = require('path');
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (/\.(html|js)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  }
+}));
 
 app.use(notFoundHandler);
 app.use(errorHandler);
