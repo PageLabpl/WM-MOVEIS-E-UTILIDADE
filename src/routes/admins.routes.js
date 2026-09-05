@@ -5,6 +5,7 @@ const { query } = require('../config/db');
 const { validate } = require('../middleware/validate');
 const { requireAuth, requireSuper } = require('../middleware/auth');
 const { requireCsrf } = require('../middleware/csrf');
+const { PERMISSION_DEFS, PERMISSION_KEYS } = require('../config/permissions');
 
 const router = express.Router();
 
@@ -12,11 +13,29 @@ const router = express.Router();
 // flag pode ver, criar, editar ou excluir outras contas de administrador.
 router.use('/admin/admins', requireAuth, requireSuper);
 
+/** Monta um objeto de permissões válido a partir do que veio no corpo da
+ *  requisição, ignorando qualquer chave que não exista no catálogo. */
+function sanitizePermissions(input) {
+  const out = {};
+  if (input && typeof input === 'object') {
+    for (const key of PERMISSION_KEYS) {
+      if (typeof input[key] === 'boolean') out[key] = input[key];
+    }
+  }
+  return out;
+}
+
+/** GET /api/admin/admins/permission-catalog — lista as permissões disponíveis
+ *  (pra montar a tabela no front-end sem duplicar a lista manualmente). */
+router.get('/admin/admins/permission-catalog', (req, res) => {
+  res.json(PERMISSION_DEFS);
+});
+
 /** GET /api/admin/admins — lista todas as contas de admin (sem o hash de senha). */
 router.get('/admin/admins', async (req, res, next) => {
   try {
     const { rows } = await query(
-      `SELECT id, email, is_super, can_products, can_reports, created_at, last_login_at
+      `SELECT id, email, is_super, permissions, created_at, last_login_at
        FROM admins ORDER BY created_at ASC`
     );
     res.json(rows);
@@ -30,17 +49,15 @@ router.post(
   [
     body('email').isEmail().normalizeEmail().withMessage('E-mail inválido.'),
     body('password').isString().isLength({ min: 10, max: 200 }).withMessage('A senha deve ter pelo menos 10 caracteres.'),
-    body('canProducts').optional().isBoolean(),
-    body('canReports').optional().isBoolean(),
-    body('isSuper').optional().isBoolean()
+    body('isSuper').optional().isBoolean(),
+    body('permissions').optional().isObject()
   ],
   validate,
   async (req, res, next) => {
     try {
       const email = req.body.email;
-      const canProducts = req.body.canProducts !== undefined ? !!req.body.canProducts : true;
-      const canReports = req.body.canReports !== undefined ? !!req.body.canReports : false;
       const isSuper = !!req.body.isSuper;
+      const permissions = sanitizePermissions(req.body.permissions);
 
       const { rows: existing } = await query('SELECT id FROM admins WHERE email = $1', [email]);
       if (existing.length) {
@@ -49,34 +66,34 @@ router.post(
 
       const passwordHash = await bcrypt.hash(req.body.password, 12);
       const { rows } = await query(
-        `INSERT INTO admins (email, password_hash, is_super, can_products, can_reports)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, email, is_super, can_products, can_reports, created_at`,
-        [email, passwordHash, isSuper, canProducts, canReports]
+        `INSERT INTO admins (email, password_hash, is_super, permissions)
+         VALUES ($1, $2, $3, $4::jsonb)
+         RETURNING id, email, is_super, permissions, created_at`,
+        [email, passwordHash, isSuper, JSON.stringify(permissions)]
       );
       res.status(201).json(rows[0]);
     } catch (err) { next(err); }
   }
 );
 
-/** PUT /api/admin/admins/:id — atualiza as permissões de uma conta existente. */
+/** PUT /api/admin/admins/:id — atualiza permissões (mescla com as já existentes)
+ *  e/ou o status de "super" de uma conta existente. */
 router.put(
   '/admin/admins/:id',
   requireCsrf,
   [
     param('id').isUUID().withMessage('ID inválido.'),
-    body('canProducts').optional().isBoolean(),
-    body('canReports').optional().isBoolean(),
-    body('isSuper').optional().isBoolean()
+    body('isSuper').optional().isBoolean(),
+    body('permissions').optional().isObject()
   ],
   validate,
   async (req, res, next) => {
     try {
       const { id } = req.params;
-      const { canProducts, canReports, isSuper } = req.body;
+      const { isSuper } = req.body;
+      const permsPatch = sanitizePermissions(req.body.permissions);
 
-      // Nunca deixa o painel ficar sem nenhum admin "super" (ninguém poderia
-      // mais gerenciar contas depois disso).
+      // Nunca deixa o painel ficar sem nenhum admin "super".
       if (isSuper === false) {
         const { rows: supers } = await query(
           'SELECT count(*)::int AS n FROM admins WHERE is_super = true AND id != $1',
@@ -89,17 +106,11 @@ router.put(
 
       const { rows } = await query(
         `UPDATE admins SET
-           can_products = COALESCE($1, can_products),
-           can_reports  = COALESCE($2, can_reports),
-           is_super     = COALESCE($3, is_super)
-         WHERE id = $4
-         RETURNING id, email, is_super, can_products, can_reports`,
-        [
-          canProducts === undefined ? null : canProducts,
-          canReports === undefined ? null : canReports,
-          isSuper === undefined ? null : isSuper,
-          id
-        ]
+           permissions = permissions || $1::jsonb,
+           is_super    = COALESCE($2, is_super)
+         WHERE id = $3
+         RETURNING id, email, is_super, permissions`,
+        [JSON.stringify(permsPatch), isSuper === undefined ? null : isSuper, id]
       );
       if (!rows.length) return res.status(404).json({ error: 'Administrador não encontrado.' });
       res.json(rows[0]);

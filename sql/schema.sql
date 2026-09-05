@@ -10,9 +10,10 @@ CREATE TABLE IF NOT EXISTS admins (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email         TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
-  is_super      BOOLEAN NOT NULL DEFAULT false,  -- pode gerenciar outras contas de admin
-  can_products  BOOLEAN NOT NULL DEFAULT true,   -- acesso à aba de Produtos (catálogo, banner, upload)
-  can_reports   BOOLEAN NOT NULL DEFAULT true,   -- acesso aos dados internos do negócio e relatórios
+  is_super      BOOLEAN NOT NULL DEFAULT false,      -- pode gerenciar outras contas de admin (bypassa todas as permissões abaixo)
+  can_products  BOOLEAN NOT NULL DEFAULT true,       -- LEGADO: mantido só por compatibilidade, não é mais usado no código
+  can_reports   BOOLEAN NOT NULL DEFAULT true,       -- LEGADO: mantido só por compatibilidade, não é mais usado no código
+  permissions   JSONB NOT NULL DEFAULT '{}'::jsonb,  -- controle granular: { "produtos": true, "vendas": false, ... }
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_login_at TIMESTAMPTZ
 );
@@ -20,6 +21,7 @@ CREATE TABLE IF NOT EXISTS admins (
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_super BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS can_products BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS can_reports BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 -- Se o banco já tinha admins de antes desta versão (sem nenhum "super"),
 -- promove o mais antigo automaticamente — evita que o dono original do
@@ -27,6 +29,30 @@ ALTER TABLE admins ADD COLUMN IF NOT EXISTS can_reports BOOLEAN NOT NULL DEFAULT
 UPDATE admins SET is_super = true, can_products = true, can_reports = true
 WHERE id = (SELECT id FROM admins ORDER BY created_at ASC LIMIT 1)
   AND NOT EXISTS (SELECT 1 FROM admins WHERE is_super = true);
+
+-- Migra o controle antigo (2 chaves: produtos/relatórios) para o novo formato
+-- granular (uma chave por função do painel) — só roda em contas que ainda
+-- não têm nada configurado em "permissions", pra não sobrescrever ajustes
+-- finos que já tenham sido feitos manualmente depois desta atualização.
+UPDATE admins SET permissions = jsonb_build_object(
+  'produtos', can_products,
+  'estoque', can_reports,
+  'vendas', can_reports,
+  'relvendas', can_reports,
+  'devolucao', can_reports,
+  'clientes', can_reports,
+  'orcamentos', can_reports,
+  'fiado', can_reports,
+  'caixa', can_reports,
+  'prolabore', can_reports,
+  'mei', can_reports,
+  'relatorios', can_reports,
+  'relclientes', can_reports,
+  'metas', can_reports,
+  'frete', can_reports,
+  'config', true
+)
+WHERE permissions = '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS login_attempts (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),

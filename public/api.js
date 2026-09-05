@@ -114,6 +114,13 @@ async function apiAdminListAdmins() { return apiFetch('/api/admin/admins'); }
 async function apiAdminCreateAdmin(payload) { return apiFetch('/api/admin/admins', { method: 'POST', body: payload }); }
 async function apiAdminUpdateAdmin(id, payload) { return apiFetch('/api/admin/admins/' + encodeURIComponent(id), { method: 'PUT', body: payload }); }
 async function apiAdminDeleteAdmin(id) { return apiFetch('/api/admin/admins/' + encodeURIComponent(id), { method: 'DELETE' }); }
+async function apiAdminPermissionCatalog() { return apiFetch('/api/admin/admins/permission-catalog'); }
+
+/* ---------------- Admin: relatório de vendas por data ---------------- */
+async function apiReportSales(from, to) {
+  return apiFetch('/api/admin/reports/sales?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to));
+}
+async function apiReportSalesAudit() { return apiFetch('/api/admin/reports/sales/audit'); }
 
 /* ---------------- Admin: upload de imagens ---------------- */
 async function apiAdminUpload(files) {

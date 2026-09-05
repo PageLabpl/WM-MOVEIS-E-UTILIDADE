@@ -191,6 +191,7 @@
     <a class="nav-link" data-view="movimentacoes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Movimentações</a>
     <a class="nav-link" data-view="relatorios"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 16l4-6 3 4 5-8"/></svg>Relatório DRE</a>
     <a class="nav-link" data-view="relclientes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Rel. Clientes</a>
+    <a class="nav-link" data-view="relvendas" id="nav-relvendas-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Vendas por Data</a>
     <a class="nav-link" data-view="metas"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>Metas</a>
 
     <div class="group-label">Site</div>
@@ -748,31 +749,50 @@
       </div>
     </section>
 
+    <!-- ========== RELATÓRIO DE VENDAS POR DATA ========== -->
+    <section class="view" id="view-relvendas">
+      <div class="panel">
+        <div class="panel-head"><h2>Vendas por data</h2></div>
+        <p class="note" style="margin-bottom:14px;">Escolha um período para ver todas as vendas feitas, quanto cada uma somou e quem registrou a venda.</p>
+
+        <div class="form-grid">
+          <label><b>De</b><input type="date" id="relvendas-de"></label>
+          <label><b>Até</b><input type="date" id="relvendas-ate"></label>
+        </div>
+        <div class="btn-row" style="margin:10px 0;">
+          <button class="btn" onclick="gerarRelatorioVendas()">Gerar relatório</button>
+        </div>
+
+        <div id="relvendas-resumo" style="margin:10px 0; font-size:14px;"></div>
+        <div id="relvendas-resultado"></div>
+
+        <div id="relvendas-audit-wrap" style="display:none; margin-top:30px;">
+          <div class="panel-head"><h3 style="margin:0;">Quem gerou relatórios recentemente</h3></div>
+          <div id="relvendas-audit"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ========== ADMINISTRADORES (só aparece para quem é "super") ========== -->
     <section class="view" id="view-admins">
       <div class="panel">
         <div class="panel-head"><h2>Contas de administrador</h2></div>
         <p class="note" style="margin-bottom:14px;">
-          Crie uma conta para cada pessoa da equipe e escolha o que cada uma pode acessar.
-          Contas com <b>acesso total</b> podem gerenciar outras contas de administrador.
+          Crie uma conta para cada pessoa da equipe e marque exatamente o que cada uma pode acessar.
+          Contas <b>super</b> ignoram essa tabela e têm acesso a tudo, incluindo gerenciar outras contas.
         </p>
 
-        <div id="admins-list" style="margin-bottom:20px;"></div>
+        <div id="admins-list" style="margin-bottom:26px; overflow-x:auto;"></div>
 
         <div class="panel-head"><h3 style="margin:0;">Nova conta</h3></div>
         <div class="form-grid">
           <label><b>E-mail</b><input type="email" id="newadmin-email" placeholder="pessoa@wmoveis.com.br"></label>
           <label><b>Senha</b><input type="password" id="newadmin-password" placeholder="mínimo 10 caracteres" autocomplete="new-password"></label>
         </div>
-        <div class="btn-row" style="margin:10px 0;">
+        <div id="newadmin-perms" style="display:flex;flex-wrap:wrap;gap:10px 18px;margin:12px 0;"></div>
+        <div class="btn-row" style="margin-bottom:10px;">
           <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;">
-            <input type="checkbox" id="newadmin-products" checked> Acesso a Produtos
-          </label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;">
-            <input type="checkbox" id="newadmin-reports"> Acesso a Relatórios/dados internos
-          </label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;">
-            <input type="checkbox" id="newadmin-super"> Acesso total (super — pode gerenciar outros admins)
+            <input type="checkbox" id="newadmin-super"> Acesso total (super — ignora a lista acima e pode gerenciar outros admins)
           </label>
         </div>
         <div class="btn-row">
@@ -844,34 +864,59 @@ function isApiMode(){ return !!getApiBaseUrl(); }
 
 /** Mostra/esconde abas do menu de acordo com as permissões do admin logado.
  *  Em modo local (sem backend) ninguém tem restrição — é só para demonstração. */
+// Mapeia cada aba do menu (data-view) para a permissão que a controla.
+// Abas fora desse mapa (painel, calculadora, config) ficam sempre visíveis —
+// "config" tem alguns campos (dados da empresa/banner) protegidos direto na
+// API, mas a aba em si fica acessível pra qualquer admin trocar a própria senha.
+const NAV_PERMISSION_MAP = {
+  produtos: 'produtos',
+  movimentar: 'estoque',
+  movimentacoes: 'estoque',
+  vendas: 'vendas',
+  relvendas: 'relvendas',
+  devolucao: 'devolucao',
+  clientes: 'clientes',
+  orcamentos: 'orcamentos',
+  fiado: 'fiado',
+  caixa: 'caixa',
+  prolabore: 'prolabore',
+  mei: 'mei',
+  relatorios: 'relatorios',
+  relclientes: 'relclientes',
+  metas: 'metas',
+  frete: 'frete'
+};
+
 function applyPermissions(){
-  const navProdutos = document.querySelector('[data-view="produtos"]');
-  const navRelatorios = document.querySelector('[data-view="relatorios"]');
-  const navRelClientes = document.querySelector('[data-view="relclientes"]');
   const navAdmins = document.getElementById('nav-admins-link');
 
   if(!isApiMode() || !currentAdmin){
     // modo local/demo: libera tudo, sem aba de administradores
-    [navProdutos, navRelatorios, navRelClientes].forEach(el => { if(el) el.style.display = ''; });
+    Object.keys(NAV_PERMISSION_MAP).forEach(view => {
+      const el = document.querySelector(`[data-view="${view}"]`);
+      if(el) el.style.display = '';
+    });
     if(navAdmins) navAdmins.style.display = 'none';
     return;
   }
 
-  const canProducts = currentAdmin.is_super || !!currentAdmin.can_products;
-  const canReports  = currentAdmin.is_super || !!currentAdmin.can_reports;
-
-  if(navProdutos) navProdutos.style.display = canProducts ? '' : 'none';
-  if(navRelatorios) navRelatorios.style.display = canReports ? '' : 'none';
-  if(navRelClientes) navRelClientes.style.display = canReports ? '' : 'none';
+  Object.entries(NAV_PERMISSION_MAP).forEach(([view, permKey]) => {
+    const el = document.querySelector(`[data-view="${view}"]`);
+    if(!el) return;
+    const allowed = currentAdmin.is_super || !!(currentAdmin.permissions && currentAdmin.permissions[permKey]);
+    el.style.display = allowed ? '' : 'none';
+  });
   if(navAdmins) navAdmins.style.display = currentAdmin.is_super ? '' : 'none';
 
   // Se a pessoa estiver numa view à qual perdeu acesso, manda de volta pro Painel.
   const activeView = document.querySelector('.view.active');
   if(activeView){
     const id = activeView.id;
-    if((id === 'view-produtos' && !canProducts) ||
-       ((id === 'view-relatorios' || id === 'view-relclientes') && !canReports) ||
-       (id === 'view-admins' && !currentAdmin.is_super)){
+    const viewName = id.replace(/^view-/, '');
+    const permKey = NAV_PERMISSION_MAP[viewName];
+    const lostAccess = (permKey && !(currentAdmin.is_super || (currentAdmin.permissions && currentAdmin.permissions[permKey])))
+      || (viewName === 'admins' && !currentAdmin.is_super);
+    if(lostAccess){
       document.querySelector('[data-view="painel"]').click();
     }
   }
@@ -1251,7 +1296,8 @@ function finalizeSale(){
     id: uid(), date: new Date().toISOString(),
     customerId: document.getElementById('v-cliente').value || null,
     payment: document.getElementById('v-pagamento').value,
-    items: cart, total
+    items: cart, total,
+    soldBy: (isApiMode() && currentAdmin) ? currentAdmin.email : null
   };
   const sales = getSales(); sales.unshift(sale); setSales(sales);
 
@@ -1471,6 +1517,13 @@ function initBackendPanel(){
 
 /* ============ Administradores (só quem é super) ============ */
 let _adminsCache = [];
+let _permCatalog = []; // [{key,label}, ...] — vem do backend, uma única fonte da verdade
+
+async function loadPermCatalog(){
+  if(_permCatalog.length) return _permCatalog;
+  _permCatalog = await apiAdminPermissionCatalog();
+  return _permCatalog;
+}
 
 async function renderAdminsView(){
   const view = document.getElementById('view-admins');
@@ -1478,42 +1531,77 @@ async function renderAdminsView(){
   if(!isApiMode() || !currentAdmin || !currentAdmin.is_super) return;
 
   const list = document.getElementById('admins-list');
+  const permsWrap = document.getElementById('newadmin-perms');
   list.innerHTML = '<p class="note">Carregando...</p>';
   try{
+    const catalog = await loadPermCatalog();
+
+    // Monta os checkboxes do formulário "Nova conta" uma única vez.
+    if(permsWrap && !permsWrap.dataset.built){
+      permsWrap.innerHTML = catalog.map(p => `
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+          <input type="checkbox" class="newadmin-perm" data-key="${p.key}"> ${p.label}
+        </label>
+      `).join('');
+      permsWrap.dataset.built = '1';
+    }
+
     _adminsCache = await apiAdminListAdmins();
-    list.innerHTML = _adminsCache.map(a => `
-      <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;">
-        <div style="flex:1;min-width:180px;">
+
+    const header = `
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:${260 + catalog.length*90}px;">
+        <thead><tr style="text-align:left;border-bottom:2px solid var(--line);">
+          <th style="padding:6px 8px;">E-mail</th>
+          <th style="padding:6px 8px;">Super</th>
+          ${catalog.map(p=>`<th style="padding:6px 8px;white-space:nowrap;" title="${p.label}">${p.label.split(' ')[0]}</th>`).join('')}
+          <th style="padding:6px 8px;"></th>
+        </tr></thead>
+        <tbody>`;
+
+    const rows = _adminsCache.map(a => `
+      <tr style="border-bottom:1px solid var(--line);">
+        <td style="padding:6px 8px;white-space:nowrap;">
           <b>${a.email}</b>${a.id === currentAdmin.id ? ' <span class="note">(você)</span>' : ''}
-          <div class="note" style="font-size:11.5px;">Criado em ${new Date(a.created_at).toLocaleDateString('pt-BR')}</div>
-        </div>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
-          <input type="checkbox" ${a.can_products?'checked':''} ${a.is_super?'disabled':''}
-                 onchange="alterarPermissaoAdmin('${a.id}','canProducts',this.checked)"> Produtos
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
-          <input type="checkbox" ${a.can_reports?'checked':''} ${a.is_super?'disabled':''}
-                 onchange="alterarPermissaoAdmin('${a.id}','canReports',this.checked)"> Relatórios
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+        </td>
+        <td style="padding:6px 8px;text-align:center;">
           <input type="checkbox" ${a.is_super?'checked':''}
-                 onchange="alterarPermissaoAdmin('${a.id}','isSuper',this.checked)"> Super
-        </label>
-        ${a.id === currentAdmin.id ? '' : `<button class="btn" style="padding:6px 12px;" onclick="excluirAdmin('${a.id}','${a.email}')">Excluir</button>`}
-      </div>
-    `).join('') || '<p class="note">Nenhum admin encontrado.</p>';
+                 onchange="alterarSuperAdmin('${a.id}',this.checked)">
+        </td>
+        ${catalog.map(p => `
+          <td style="padding:6px 8px;text-align:center;">
+            <input type="checkbox" ${(a.is_super || (a.permissions && a.permissions[p.key]))?'checked':''} ${a.is_super?'disabled':''}
+                   onchange="alterarPermissaoAdmin('${a.id}','${p.key}',this.checked)">
+          </td>
+        `).join('')}
+        <td style="padding:6px 8px;white-space:nowrap;">
+          ${a.id === currentAdmin.id ? '' : `<button class="btn" style="padding:5px 10px;font-size:12px;" onclick="excluirAdmin('${a.id}','${a.email}')">Excluir</button>`}
+        </td>
+      </tr>
+    `).join('');
+
+    list.innerHTML = header + rows + '</tbody></table>';
   }catch(err){
     list.innerHTML = `<p class="note" style="color:#e33;">Erro ao carregar: ${err.message}</p>`;
   }
 }
 
-async function alterarPermissaoAdmin(id, campo, valor){
+async function alterarPermissaoAdmin(id, key, valor){
   try{
-    await apiAdminUpdateAdmin(id, { [campo]: valor });
+    await apiAdminUpdateAdmin(id, { permissions: { [key]: valor } });
     await renderAdminsView();
   }catch(err){
     alert(err.message || 'Não foi possível alterar a permissão.');
-    await renderAdminsView(); // desfaz visualmente o toggle em caso de erro
+    await renderAdminsView();
+  }
+}
+
+async function alterarSuperAdmin(id, valor){
+  try{
+    await apiAdminUpdateAdmin(id, { isSuper: valor });
+    await renderAdminsView();
+  }catch(err){
+    alert(err.message || 'Não foi possível alterar o acesso.');
+    await renderAdminsView();
   }
 }
 
@@ -1530,9 +1618,9 @@ async function excluirAdmin(id, email){
 async function criarNovoAdmin(){
   const email = document.getElementById('newadmin-email').value.trim();
   const password = document.getElementById('newadmin-password').value;
-  const canProducts = document.getElementById('newadmin-products').checked;
-  const canReports = document.getElementById('newadmin-reports').checked;
   const isSuper = document.getElementById('newadmin-super').checked;
+  const permissions = {};
+  document.querySelectorAll('.newadmin-perm').forEach(el => { permissions[el.dataset.key] = el.checked; });
   const msgEl = document.getElementById('admins-msg');
   msgEl.textContent = '';
 
@@ -1543,16 +1631,101 @@ async function criarNovoAdmin(){
   }
 
   try{
-    await apiAdminCreateAdmin({ email, password, canProducts, canReports, isSuper });
+    await apiAdminCreateAdmin({ email, password, permissions, isSuper });
     document.getElementById('newadmin-email').value = '';
     document.getElementById('newadmin-password').value = '';
     document.getElementById('newadmin-super').checked = false;
+    document.querySelectorAll('.newadmin-perm').forEach(el => { el.checked = false; });
     msgEl.style.color = '#2a2';
     msgEl.textContent = 'Conta criada com sucesso.';
     await renderAdminsView();
   }catch(err){
     msgEl.style.color = '#e33';
     msgEl.textContent = err.message || 'Não foi possível criar a conta.';
+  }
+}
+
+/* ============ Relatório de vendas por data ============ */
+async function gerarRelatorioVendas(){
+  const de = document.getElementById('relvendas-de').value;
+  const ate = document.getElementById('relvendas-ate').value;
+  const resumoEl = document.getElementById('relvendas-resumo');
+  const resultEl = document.getElementById('relvendas-resultado');
+
+  if(!de || !ate){
+    resumoEl.innerHTML = '<span style="color:#e33;">Escolha as duas datas.</span>';
+    return;
+  }
+  if(!isApiMode()){
+    resumoEl.innerHTML = '<span style="color:#e33;">Esse relatório só funciona conectado ao backend.</span>';
+    return;
+  }
+
+  resumoEl.textContent = 'Gerando...';
+  resultEl.innerHTML = '';
+  try{
+    const rel = await apiReportSales(de, ate);
+    resumoEl.innerHTML = `<b>${rel.count}</b> venda(s) encontrada(s) — total: <b>${money(rel.total)}</b>`;
+
+    if(!rel.sales.length){
+      resultEl.innerHTML = '<p class="note">Nenhuma venda nesse período.</p>';
+    } else {
+      resultEl.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px;">
+          <thead><tr style="text-align:left;border-bottom:2px solid var(--line);">
+            <th style="padding:6px 8px;">Data</th>
+            <th style="padding:6px 8px;">Itens</th>
+            <th style="padding:6px 8px;">Total</th>
+            <th style="padding:6px 8px;">Vendido por</th>
+          </tr></thead>
+          <tbody>
+            ${rel.sales.map(s => `
+              <tr style="border-bottom:1px solid var(--line);">
+                <td style="padding:6px 8px;white-space:nowrap;">${new Date(s.date).toLocaleString('pt-BR')}</td>
+                <td style="padding:6px 8px;">${(s.items||[]).map(i=>`${i.qty}x ${i.name}`).join(', ')}</td>
+                <td style="padding:6px 8px;white-space:nowrap;">${money(s.total)}</td>
+                <td style="padding:6px 8px;white-space:nowrap;">${s.soldBy || '<span class="note">—</span>'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+    }
+  }catch(err){
+    resumoEl.innerHTML = `<span style="color:#e33;">${err.message || 'Erro ao gerar relatório.'}</span>`;
+  }
+
+  await renderRelVendasAudit();
+}
+
+/** Mostra, só para admins super, quem gerou relatórios de vendas e quando. */
+async function renderRelVendasAudit(){
+  const wrap = document.getElementById('relvendas-audit-wrap');
+  const el = document.getElementById('relvendas-audit');
+  if(!currentAdmin || !currentAdmin.is_super){ wrap.style.display = 'none'; return; }
+
+  wrap.style.display = '';
+  el.innerHTML = '<p class="note">Carregando...</p>';
+  try{
+    const rows = await apiReportSalesAudit();
+    el.innerHTML = rows.length ? `
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr style="text-align:left;border-bottom:2px solid var(--line);">
+          <th style="padding:5px 8px;">Quando</th>
+          <th style="padding:5px 8px;">Período consultado</th>
+          <th style="padding:5px 8px;">Gerado por</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr style="border-bottom:1px solid var(--line);">
+              <td style="padding:5px 8px;white-space:nowrap;">${new Date(r.created_at).toLocaleString('pt-BR')}</td>
+              <td style="padding:5px 8px;">${(r.periodo||'').replace('_a_',' até ')}</td>
+              <td style="padding:5px 8px;">${r.gerado_por || '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>` : '<p class="note">Nenhum relatório gerado ainda.</p>';
+  }catch(err){
+    el.innerHTML = `<p class="note" style="color:#e33;">${err.message}</p>`;
   }
 }
 

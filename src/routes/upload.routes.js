@@ -10,7 +10,7 @@ const router = express.Router();
 router.post(
   '/admin/upload',
   requireAuth,
-  requirePermission('can_products'),
+  requirePermission('produtos'),
   requireCsrf,
   uploadLimiter,
   upload.array('images', MAX_FILES),

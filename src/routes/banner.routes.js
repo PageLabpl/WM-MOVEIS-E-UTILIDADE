@@ -17,7 +17,7 @@ router.get('/hero-banner', async (req, res, next) => {
 router.put(
   '/admin/hero-banner',
   requireAuth,
-  requirePermission('can_products'),
+  requirePermission('produtos'),
   requireCsrf,
   [
     body('image').optional({ nullable: true }).isString().isLength({ max: 3000 }),

@@ -25,6 +25,7 @@ const bannerRoutes = require('./src/routes/banner.routes');
 const uploadRoutes = require('./src/routes/upload.routes');
 const dataRoutes = require('./src/routes/data.routes');
 const adminsRoutes = require('./src/routes/admins.routes');
+const reportsRoutes = require('./src/routes/reports.routes');
 
 const app = express();
 
@@ -72,6 +73,7 @@ app.use('/api', bannerRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api', dataRoutes);
 app.use('/api', adminsRoutes);
+app.use('/api', reportsRoutes);
 
 // Serve o site, a página de produto e o painel como arquivos estáticos, do
 // mesmo serviço/domínio da API. Isso elimina a necessidade de CORS entre

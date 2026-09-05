@@ -49,7 +49,7 @@ router.post(
         });
       }
 
-      const { rows } = await query('SELECT id, email, password_hash, is_super, can_products, can_reports FROM admins WHERE email = $1', [email]);
+      const { rows } = await query('SELECT id, email, password_hash, is_super, permissions FROM admins WHERE email = $1', [email]);
       const admin = rows[0];
 
       // Mensagem genérica proposital: não revela se o e-mail existe ou não (evita enumeração de contas).
@@ -78,8 +78,7 @@ router.post(
             id: admin.id,
             email: admin.email,
             is_super: admin.is_super,
-            can_products: admin.can_products,
-            can_reports: admin.can_reports
+            permissions: admin.permissions
           },
           csrfToken: res.locals.csrfToken
         });

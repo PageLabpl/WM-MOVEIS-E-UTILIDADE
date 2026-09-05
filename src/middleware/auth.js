@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { query } = require('../config/db');
+const { hasPermission } = require('../config/permissions');
 
 const COOKIE_NAME = 'wm_session';
 
@@ -43,7 +44,7 @@ async function requireAuth(req, res, next) {
   }
   try {
     const { rows } = await query(
-      'SELECT id, email, is_super, can_products, can_reports FROM admins WHERE id = $1',
+      'SELECT id, email, is_super, permissions FROM admins WHERE id = $1',
       [payload.sub]
     );
     if (!rows.length) {
@@ -62,11 +63,11 @@ function requireSuper(req, res, next) {
   return res.status(403).json({ error: 'Apenas um administrador principal pode fazer isso.' });
 }
 
-/** Exige uma permissão específica (ex: 'can_products', 'can_reports').
- *  Admins "super" sempre passam, independente das flags individuais. */
+/** Exige uma permissão específica do catálogo (ex: 'produtos', 'vendas').
+ *  Admins "super" sempre passam, independente das permissões individuais. */
 function requirePermission(perm) {
   return (req, res, next) => {
-    if (req.admin && (req.admin.is_super || req.admin[perm])) return next();
+    if (hasPermission(req.admin, perm)) return next();
     return res.status(403).json({ error: 'Você não tem permissão para acessar este recurso.' });
   };
 }

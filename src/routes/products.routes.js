@@ -6,7 +6,7 @@ const { requireCsrf } = require('../middleware/csrf');
 const ctrl = require('../controllers/products.controller');
 
 const router = express.Router();
-const requireProducts = requirePermission('can_products');
+const requireProducts = requirePermission('produtos');
 
 const VALID_CATEGORIES = ['sala','quarto','cozinha','banheiro','escritorio','decoracao','utilidades','organizacao'];
 
