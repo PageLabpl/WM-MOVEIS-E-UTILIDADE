@@ -8,6 +8,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="api.js"></script>
 <script src="products.js"></script>
+<script src="shop.js"></script>
+<script src="customer-auth.js"></script>
 <style>
   :root{
     --bg: #0e0e0e;
@@ -205,6 +207,7 @@
     display:flex; align-items:center; justify-content:center; color:#fff; transition:color .2s;
   }
   .fav-btn:hover { color:var(--gold); }
+  .fav-btn.active { color:var(--gold); }
   .discount-badge {
     position:absolute; top:10px; left:10px; background:var(--red); color:#fff; font-size:12px; font-weight:700;
     padding:4px 9px; border-radius:4px;
@@ -325,24 +328,24 @@
       </div>
     </div>
 
-    <form class="search-bar" onsubmit="return false;">
-      <input type="text" placeholder="O que você procura?">
+    <form class="search-bar" onsubmit="event.preventDefault(); runSearch();">
+      <input type="text" id="searchInput" placeholder="O que você procura?">
       <button type="submit" aria-label="Buscar">
         <svg class="icon" viewBox="0 0 24 24" stroke="#111"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
       </button>
     </form>
 
     <div class="header-actions">
-      <div class="action">
+      <div class="action" id="accountAction" style="cursor:pointer">
         <div class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 4-6 8-6s8 2 8 6"></path></svg></div>
-        <div class="label"><div class="top">Olá, faça seu login</div><div class="bottom">Minha conta ▾</div></div>
+        <div class="label"><div class="top" id="accountTop">Olá, faça seu login</div><div class="bottom">Minha conta ▾</div></div>
       </div>
-      <div class="action" style="cursor:pointer" onclick="incrementCart()">
+      <div class="action" style="cursor:pointer" onclick="openCart()">
         <div class="icon-wrap">
           <svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1.4"></circle><circle cx="18" cy="21" r="1.4"></circle><path d="M2 3h3l2.6 12.4a2 2 0 0 0 2 1.6h8.4a2 2 0 0 0 2-1.6L22 7H6"></path></svg>
-          <span class="cart-badge" id="cartCount">1</span>
+          <span class="cart-badge" id="cartCount" data-cart-badge>0</span>
         </div>
-        <div class="label"><div class="top">Meu carrinho</div><div class="bottom" id="cartTotal">R$ 1.299,90</div></div>
+        <div class="label"><div class="top">Meu carrinho</div><div class="bottom" id="cartTotal" data-cart-total>R$ 0,00</div></div>
       </div>
     </div>
   </div>
@@ -370,6 +373,18 @@
   </div>
 </nav>
 
+<!-- RESULTADOS DE BUSCA -->
+<section class="section" id="searchResultsSection" style="display:none;">
+  <div class="container">
+    <div class="section-head">
+      <h2 id="searchResultsTitle">RESULTADOS DA BUSCA</h2>
+      <a href="#" onclick="clearSearch(); return false;" style="font-size:13px;color:var(--gold-light);">Limpar busca ✕</a>
+    </div>
+    <div class="product-grid" id="searchResultsGrid"></div>
+  </div>
+</section>
+
+<div id="mainSections">
 <!-- HERO -->
 <section class="hero">
   <div class="hero-slide" id="heroSlide">
@@ -506,6 +521,7 @@
     </div>
   </div>
 </section>
+</div>
 
 <!-- FOOTER -->
 <footer>
@@ -551,8 +567,8 @@ function renderProducts(container, list, withDiscount){
       <div class="product-img-wrap">
         ${ (withDiscount && p.oldPrice > p.price) ? `<span class="discount-badge">-${Math.round((1-p.price/p.oldPrice)*100)}%</span>` : '' }
         <img src="${p.images[0]}" alt="${p.name}" loading="lazy">
-        <button class="fav-btn" aria-label="Favoritar" onclick="event.preventDefault(); event.stopPropagation();">
-          <svg class="icon" viewBox="0 0 24 24"><path d="M12 21s-7-4.4-9.5-8.5C.7 9 2 5.5 5.5 4.7 8 4.1 10 5.3 12 8c2-2.7 4-3.9 6.5-3.3C22 5.5 23.3 9 21.5 12.5 19 16.6 12 21 12 21z"></path></svg>
+        <button class="fav-btn ${isFavorite(p.id) ? 'active' : ''}" aria-label="Favoritar" onclick="event.preventDefault(); event.stopPropagation(); toggleFavoriteBtn(this, '${p.id}');">
+          <svg class="icon" viewBox="0 0 24 24" fill="${isFavorite(p.id) ? 'currentColor' : 'none'}"><path d="M12 21s-7-4.4-9.5-8.5C.7 9 2 5.5 5.5 4.7 8 4.1 10 5.3 12 8c2-2.7 4-3.9 6.5-3.3C22 5.5 23.3 9 21.5 12.5 19 16.6 12 21 12 21z"></path></svg>
         </button>
       </div>
       <div class="product-info">
@@ -561,10 +577,21 @@ function renderProducts(container, list, withDiscount){
         ${p.oldPrice > p.price ? `<div class="price-old">R$ ${formatBR(p.oldPrice)}</div>` : ''}
         <div class="price-now">R$ ${formatBR(p.price)}</div>
         <div class="price-inst">${p.price > 0 ? `12x de R$ ${formatBR(p.price/12)}` : ''}</div>
-        <button class="btn-buy" onclick="event.preventDefault(); event.stopPropagation(); incrementCart();">COMPRAR</button>
+        <button class="btn-buy" onclick="event.preventDefault(); event.stopPropagation(); addToCartBtn('${p.id}');">COMPRAR</button>
       </div>
     </a>
   `).join('');
+}
+
+function toggleFavoriteBtn(btn, id){
+  const nowFav = toggleFavorite(id);
+  btn.classList.toggle('active', nowFav);
+  btn.querySelector('svg').setAttribute('fill', nowFav ? 'currentColor' : 'none');
+}
+
+function addToCartBtn(id){
+  addToCart(id, 1);
+  openCart();
 }
 
 function productsByTag(products, tag){
@@ -647,13 +674,32 @@ function updateCountdown(){
 updateCountdown();
 setInterval(updateCountdown, 1000);
 
-/* ---------------- Cart ---------------- */
-let cartCount = 1;
-let cartTotalValue = 1299.90;
-function incrementCart(){
-  cartCount++;
-  document.getElementById('cartCount').textContent = cartCount;
+/* ---------------- Busca ---------------- */
+async function runSearch(){
+  const term = document.getElementById('searchInput').value;
+  if(!term.trim()){ clearSearch(); return; }
+  const results = await searchProducts(term);
+  document.getElementById('mainSections').style.display = 'none';
+  const section = document.getElementById('searchResultsSection');
+  section.style.display = '';
+  document.getElementById('searchResultsTitle').textContent = `RESULTADOS PARA "${term.trim().toUpperCase()}"`;
+  const grid = document.getElementById('searchResultsGrid');
+  if(!results.length){
+    grid.innerHTML = '<p style="color:var(--text-dim);grid-column:1/-1;">Nenhum produto encontrado para essa busca.</p>';
+  } else {
+    renderProducts(grid, results, true);
+  }
+  section.scrollIntoView({ behavior:'smooth' });
 }
+function clearSearch(){
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchResultsSection').style.display = 'none';
+  document.getElementById('mainSections').style.display = '';
+}
+
+/* ---------------- Inicialização do carrinho ---------------- */
+updateCartBadges();
+
 </script>
 </body>
 </html>

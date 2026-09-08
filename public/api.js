@@ -100,6 +100,20 @@ async function apiGetProduct(id) { return apiFetch('/api/products/' + encodeURIC
 async function apiGetRelated(id) { return apiFetch('/api/products/' + encodeURIComponent(id) + '/related'); }
 async function apiGetBanner() { return apiFetch('/api/hero-banner'); }
 
+/* ---------------- Cliente do site (loja): cadastro/login/Google ---------------- */
+async function apiShopSignup(email, password, name) {
+  return apiFetch('/api/shop/auth/signup', { method: 'POST', body: { email, password, name } });
+}
+async function apiShopLogin(email, password) {
+  return apiFetch('/api/shop/auth/login', { method: 'POST', body: { email, password } });
+}
+async function apiShopLogout() { return apiFetch('/api/shop/auth/logout', { method: 'POST' }); }
+async function apiShopMe() { return apiFetch('/api/shop/auth/me'); }
+function shopGoogleLoginUrl() {
+  const base = getApiBaseUrl();
+  return base ? (base + '/api/shop/auth/google') : null;
+}
+
 /* ---------------- Admin: produtos ---------------- */
 async function apiAdminGetProducts() { return apiFetch('/api/admin/products'); }
 async function apiAdminCreateProduct(payload) { return apiFetch('/api/admin/products', { method: 'POST', body: payload }); }

@@ -8,6 +8,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="api.js"></script>
 <script src="products.js"></script>
+<script src="shop.js"></script>
+<script src="customer-auth.js"></script>
 <style>
   :root{
     --bg: #0e0e0e; --bg-alt: #151515; --card: #1a1a1a;
@@ -81,6 +83,7 @@
   .btn-buy-lg:hover { background:var(--gold-light); }
   .btn-wishlist { width:52px; height:52px; border:1px solid var(--border); border-radius:6px; display:flex; align-items:center; justify-content:center; transition:border-color .2s, color .2s; flex-shrink:0; }
   .btn-wishlist:hover { border-color:var(--gold); color:var(--gold); }
+  .btn-wishlist.active { border-color:var(--gold); color:var(--gold); }
 
   .p-perks { display:flex; flex-direction:column; gap:12px; font-size:12.5px; color:var(--text-dim); }
   .p-perks div { display:flex; align-items:center; gap:10px; }
@@ -139,6 +142,11 @@
       <svg class="icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
       Voltar para a loja
     </a>
+    <button onclick="openCart()" style="position:relative;display:flex;align-items:center;gap:8px;color:var(--text-dim);font-size:13.5px;">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1.4"></circle><circle cx="18" cy="21" r="1.4"></circle><path d="M2 3h3l2.6 12.4a2 2 0 0 0 2 1.6h8.4a2 2 0 0 0 2-1.6L22 7H6"></path></svg>
+      Carrinho
+      <span data-cart-badge style="background:var(--gold);color:#111;font-size:10.5px;font-weight:700;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;">0</span>
+    </button>
   </div>
 </header>
 
@@ -163,6 +171,7 @@ let product = null;
   } else {
     await renderProductPage(product);
   }
+  updateCartBadges();
 })();
 
 async function renderProductPage(p){
@@ -221,8 +230,8 @@ async function renderProductPage(p){
               <button onclick="changeQty(1)">+</button>
             </div>
             <button class="btn-buy-lg" onclick="addProductToCart()">ADICIONAR AO CARRINHO</button>
-            <button class="btn-wishlist" aria-label="Favoritar">
-              <svg class="icon" viewBox="0 0 24 24"><path d="M12 21s-7-4.4-9.5-8.5C.7 9 2 5.5 5.5 4.7 8 4.1 10 5.3 12 8c2-2.7 4-3.9 6.5-3.3C22 5.5 23.3 9 21.5 12.5 19 16.6 12 21 12 21z"></path></svg>
+            <button class="btn-wishlist ${isFavorite(p.id) ? 'active' : ''}" id="wishlistBtn" aria-label="Favoritar" onclick="toggleWishlistBtn('${p.id}')">
+              <svg class="icon" viewBox="0 0 24 24" fill="${isFavorite(p.id) ? 'currentColor' : 'none'}"><path d="M12 21s-7-4.4-9.5-8.5C.7 9 2 5.5 5.5 4.7 8 4.1 10 5.3 12 8c2-2.7 4-3.9 6.5-3.3C22 5.5 23.3 9 21.5 12.5 19 16.6 12 21 12 21z"></path></svg>
             </button>
           </div>
 
@@ -317,7 +326,16 @@ function changeQty(delta){
   document.getElementById('qtyVal').textContent = qty;
 }
 function addProductToCart(){
-  alert(`${qty}x "${product.name}" adicionado ao carrinho!`);
+  const colorEl = document.getElementById('colorName');
+  const color = (colorEl && colorEl.textContent.trim()) ? colorEl.textContent.trim() : null;
+  addToCart(product.id, qty, color);
+  openCart();
+}
+function toggleWishlistBtn(id){
+  const nowFav = toggleFavorite(id);
+  const btn = document.getElementById('wishlistBtn');
+  btn.classList.toggle('active', nowFav);
+  btn.querySelector('svg').setAttribute('fill', nowFav ? 'currentColor' : 'none');
 }
 
 async function renderRelated(p){

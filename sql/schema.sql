@@ -61,6 +61,19 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   success      BOOLEAN NOT NULL,
   attempted_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Clientes do SITE (quem compra) — totalmente separado da tabela "admins"
+-- (quem gerencia o painel). password_hash fica NULL quando a conta só usa
+-- login via Google.
+CREATE TABLE IF NOT EXISTS shop_customers (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         TEXT UNIQUE NOT NULL,
+  password_hash TEXT,
+  name          TEXT,
+  google_id     TEXT UNIQUE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_login_at TIMESTAMPTZ
+);
 CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup ON login_attempts (email, ip, attempted_at);
 
 CREATE TABLE IF NOT EXISTS products (
