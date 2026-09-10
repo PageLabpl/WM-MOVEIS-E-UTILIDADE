@@ -1144,7 +1144,8 @@ async function saveProduct(){
     }catch(err){
       saveBtn.disabled = false;
       saveBtn.innerText = originalBtnText;
-      alert('Erro ao salvar no servidor: ' + err.message);
+      const detalhes = (err.details || []).map(d => `${d.field}: ${d.message}`).join('\n');
+      alert('Erro ao salvar no servidor: ' + err.message + (detalhes ? '\n\n' + detalhes : ''));
       return;
     }
   } else {
