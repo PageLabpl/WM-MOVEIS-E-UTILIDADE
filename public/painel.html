@@ -347,7 +347,7 @@
             <label><b>Pagamento</b>
               <select id="v-pagamento">
                 <option>Dinheiro</option><option>Pix</option><option>Cartão de débito</option>
-                <option>Cartão de crédito</option><option>Fiado</option>
+                <option>Cartão de crédito</option><option>Boleto</option><option>Crediário</option><option>Fiado</option>
               </select>
             </label>
           </div>
@@ -382,7 +382,13 @@
         </div>
         <div class="panel">
           <div class="panel-head"><h2>Histórico de devoluções</h2></div>
-          <table><thead><tr><th>Data</th><th>Venda</th><th>Itens</th><th>Motivo</th></tr></thead>
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:end;">
+            <label style="margin:0;"><b style="font-size:11.5px;">De</b><input type="date" id="dev-filtro-de" onchange="renderDevolucao()"></label>
+            <label style="margin:0;"><b style="font-size:11.5px;">Até</b><input type="date" id="dev-filtro-ate" onchange="renderDevolucao()"></label>
+            <button class="btn ghost" style="padding:8px 14px;" onclick="document.getElementById('dev-filtro-de').value='';document.getElementById('dev-filtro-ate').value='';renderDevolucao();">Limpar filtro</button>
+          </div>
+          <div style="font-size:12.5px;margin-bottom:10px;">Total devolvido no período: <b id="dev-total-periodo">R$ 0,00</b></div>
+          <table><thead><tr><th>Data</th><th>Venda</th><th>Itens</th><th>Valor</th><th>Motivo</th></tr></thead>
             <tbody id="tbl-devolucoes"></tbody></table>
         </div>
       </div>
@@ -421,6 +427,15 @@
             </div>
           </label>
           <div id="orcamento-list" style="margin-top:12px;"></div>
+          <label style="margin-top:10px;"><b>Desconto</b>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="number" id="o-desconto-valor" value="0" min="0" step="0.01" style="flex:1;">
+              <select id="o-desconto-tipo" style="width:110px;">
+                <option value="percent">%</option>
+                <option value="fixed">R$</option>
+              </select>
+            </div>
+          </label>
           <div class="cart-total"><span>Total</span><b id="orcamento-total-val">R$ 0,00</b></div>
           <div class="btn-row"><button class="btn block" onclick="salvarOrcamento()">Salvar orçamento</button></div>
         </div>
@@ -428,6 +443,23 @@
           <div class="panel-head"><h2>Orçamentos pendentes</h2></div>
           <table><thead><tr><th>Data</th><th>Cliente</th><th>Total</th><th>Status</th><th></th></tr></thead>
             <tbody id="tbl-orcamentos"></tbody></table>
+        </div>
+      </div>
+
+      <!-- Modal simples: escolher forma de pagamento antes de converter em venda -->
+      <div id="convertOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center;">
+        <div class="panel" style="max-width:360px;width:100%;">
+          <div class="panel-head"><h2>Converter em venda</h2></div>
+          <label><b>Forma de pagamento</b>
+            <select id="convert-pagamento">
+              <option>Dinheiro</option><option>Pix</option><option>Cartão de débito</option>
+              <option>Cartão de crédito</option><option>Boleto</option><option>Crediário</option><option>Fiado</option>
+            </select>
+          </label>
+          <div class="btn-row" style="margin-top:14px;">
+            <button class="btn ghost" onclick="fecharConversao()">Cancelar</button>
+            <button class="btn" onclick="confirmarConversao()">Confirmar conversão</button>
+          </div>
         </div>
       </div>
     </section>
@@ -579,6 +611,7 @@
     <section class="view" id="view-relatorios">
       <div class="kpis">
         <div class="kpi"><span>Total vendido</span><b class="green" id="rel-total-vendas">R$ 0,00</b></div>
+        <div class="kpi"><span>Total devolvido</span><b id="rel-total-devolvido">R$ 0,00</b></div>
         <div class="kpi"><span>Custo total</span><b id="rel-total-custo">R$ 0,00</b></div>
         <div class="kpi"><span>Lucro líquido</span><b class="green" id="rel-lucro">R$ 0,00</b></div>
         <div class="kpi"><span>Nº de vendas</span><b id="rel-num-vendas">0</b></div>
@@ -688,6 +721,8 @@
           <label><b>Razão social</b><input type="text" id="emp-razao"></label>
           <label><b>CNPJ</b><input type="text" id="emp-cnpj"></label>
           <label><b>E-mail</b><input type="email" id="emp-email"></label>
+          <label><b>Telefone / WhatsApp</b><input type="text" id="emp-telefone"></label>
+          <label><b>Endereço</b><input type="text" id="emp-endereco" placeholder="Rua, número, bairro, cidade - UF"></label>
         </div>
         <div class="btn-row"><button class="btn" onclick="saveCompany()">Salvar dados da empresa</button></div>
       </div>
@@ -1384,8 +1419,11 @@ function renderDashboard(){
   const sales = getSales();
   const products = getProducts();
   const todaySales = sales.filter(s => s.date.slice(0,10) === todayISO());
-  const fatHoje = todaySales.reduce((s,x)=>s+x.total,0);
-  const lucroHoje = todaySales.reduce((s,x)=> s + x.items.reduce((a,i)=>a+(i.price-i.cost)*i.qty,0), 0);
+  const todayReturns = getReturns().filter(r => r.date.slice(0,10) === todayISO());
+  const devolvidoHoje = todayReturns.reduce((s,r)=> s + (r.total ?? (Array.isArray(r.items)?r.items.reduce((a,i)=>a+i.qty*i.price,0):0)), 0);
+  const custoDevolvidoHoje = todayReturns.reduce((s,r)=> s + (Array.isArray(r.items)?r.items.reduce((a,i)=>a+i.qty*(i.cost||0),0):0), 0);
+  const fatHoje = todaySales.reduce((s,x)=>s+x.total,0) - devolvidoHoje;
+  const lucroHoje = todaySales.reduce((s,x)=> s + x.items.reduce((a,i)=>a+(i.price-i.cost)*i.qty,0), 0) - (devolvidoHoje - custoDevolvidoHoje);
   document.getElementById('kpi-fat-hoje').innerText = money(fatHoje);
   document.getElementById('kpi-lucro-hoje').innerText = money(lucroHoje);
   document.getElementById('kpi-produtos').innerText = products.length;
@@ -1398,9 +1436,15 @@ function renderDashboard(){
 
 function renderReports(){
   const sales = getSales();
-  const totalVendas = sales.reduce((s,x)=>s+x.total,0);
-  const totalCusto = sales.reduce((s,x)=> s + x.items.reduce((a,i)=>a+i.cost*i.qty,0), 0);
+  const returns = getReturns();
+  const totalVendasBruto = sales.reduce((s,x)=>s+x.total,0);
+  const totalCustoBruto = sales.reduce((s,x)=> s + x.items.reduce((a,i)=>a+i.cost*i.qty,0), 0);
+  const totalDevolvido = returns.reduce((s,r)=> s + (r.total ?? (Array.isArray(r.items)?r.items.reduce((a,i)=>a+i.qty*i.price,0):0)), 0);
+  const custoDevolvido = returns.reduce((s,r)=> s + (Array.isArray(r.items)?r.items.reduce((a,i)=>a+i.qty*(i.cost||0),0):0), 0);
+  const totalVendas = totalVendasBruto - totalDevolvido;
+  const totalCusto = totalCustoBruto - custoDevolvido;
   document.getElementById('rel-total-vendas').innerText = money(totalVendas);
+  document.getElementById('rel-total-devolvido').innerText = money(totalDevolvido);
   document.getElementById('rel-total-custo').innerText = money(totalCusto);
   document.getElementById('rel-lucro').innerText = money(totalVendas-totalCusto);
   document.getElementById('rel-num-vendas').innerText = sales.length;
@@ -1824,55 +1868,120 @@ function calcularPreco(){
 /* ============ Devolução ============ */
 function getReturns(){ return load('wm_returns', []); }
 function setReturns(l){ save('wm_returns', l); }
+
+/** Quanto já foi devolvido de cada item de cada venda até agora —
+ *  { saleId: { productId: qtyJaDevolvida } } — usado tanto para bloquear
+ *  devolver de novo o que já foi 100% devolvido quanto para permitir
+ *  devolver só uma parte de um item com mais de 1 unidade. */
+function getReturnedQtyMap(){
+  const map = {};
+  getReturns().forEach(r=>{
+    if(!map[r.saleId]) map[r.saleId] = {};
+    const items = Array.isArray(r.items) ? r.items : []; // devoluções antigas salvavam "items" como texto — ignoradas aqui, mas ainda aparecem no histórico
+    items.forEach(i=>{
+      map[r.saleId][i.productId] = (map[r.saleId][i.productId]||0) + i.qty;
+    });
+  });
+  return map;
+}
+
 function refreshReturnSelect(){
   const sel = document.getElementById('d-venda');
   const sales = getSales();
   sel.innerHTML = sales.length ? '<option value="">Selecione...</option>' + sales.map(s=>`<option value="${s.id}">${new Date(s.date).toLocaleDateString('pt-BR')} — ${money(s.total)}</option>`).join('') : '<option value="">Nenhuma venda registrada</option>';
   document.getElementById('d-itens').innerHTML = '';
 }
+
 function carregarItensDevolucao(){
   const sid = document.getElementById('d-venda').value;
   const sale = getSales().find(s=>s.id===sid);
   const el = document.getElementById('d-itens');
   if(!sale){ el.innerHTML=''; return; }
-  el.innerHTML = sale.items.map((i,idx)=>`
-    <div class="checkbox-row"><input type="checkbox" class="d-item-check" data-idx="${idx}" data-pid="${i.productId}" data-qty="${i.qty}"><b>${i.qty}x ${i.name} — ${money(i.price*i.qty)}</b></div>
-  `).join('');
+  const returnedMap = getReturnedQtyMap()[sid] || {};
+
+  el.innerHTML = sale.items.map((i,idx)=>{
+    const jaDevolvido = returnedMap[i.productId] || 0;
+    const restante = i.qty - jaDevolvido;
+    if(restante <= 0){
+      return `<div class="checkbox-row" style="opacity:.55;">
+        <input type="checkbox" disabled>
+        <span>${i.qty}x ${i.name} — ${money(i.price*i.qty)} <span class="tag ok" style="margin-left:6px;">Já devolvido</span></span>
+      </div>`;
+    }
+    return `<div class="checkbox-row" style="align-items:center;gap:8px;">
+      <input type="checkbox" class="d-item-check" data-idx="${idx}" data-pid="${i.productId}" data-name="${i.name}" data-price="${i.price}" data-cost="${i.cost||0}" data-max="${restante}">
+      <span style="flex:1;">${i.name} — ${money(i.price)} cada${jaDevolvido ? ` <span class="note">(${jaDevolvido}x já devolvido)</span>` : ''}</span>
+      <input type="number" class="d-item-qty" min="1" max="${restante}" value="${restante}" style="width:64px;" onclick="event.stopPropagation();">
+    </div>`;
+  }).join('');
 }
+
 function confirmarDevolucao(){
   const sid = document.getElementById('d-venda').value;
   const sale = getSales().find(s=>s.id===sid);
   if(!sale){ alert('Selecione uma venda.'); return; }
-  const checks = Array.from(document.querySelectorAll('.d-item-check:checked'));
-  if(!checks.length){ alert('Selecione ao menos um item para devolver.'); return; }
+  const rows = Array.from(document.querySelectorAll('#d-itens .checkbox-row')).filter(r => {
+    const chk = r.querySelector('.d-item-check');
+    return chk && chk.checked;
+  });
+  if(!rows.length){ alert('Selecione ao menos um item para devolver.'); return; }
+
   const motivo = document.getElementById('d-motivo').value.trim() || 'Não informado';
   let products = getProducts();
   const itensDevolvidos = [];
-  checks.forEach(c=>{
-    const pid = c.dataset.pid, qty = parseInt(c.dataset.qty);
+  let erro = null;
+
+  rows.forEach(row=>{
+    const chk = row.querySelector('.d-item-check');
+    const qtyInput = row.querySelector('.d-item-qty');
+    const max = parseInt(chk.dataset.max);
+    let qty = parseInt(qtyInput.value) || 0;
+    if(qty < 1 || qty > max){
+      erro = `Quantidade inválida para "${chk.dataset.name}" (máximo devolvível: ${max}).`;
+      return;
+    }
+    const pid = chk.dataset.pid;
     products = products.map(p => p.id===pid ? {...p, qty:p.qty+qty} : p);
-    const item = sale.items.find(i=>i.productId===pid);
-    itensDevolvidos.push(`${qty}x ${item?item.name:''}`);
+    itensDevolvidos.push({ productId: pid, name: chk.dataset.name, qty, price: parseFloat(chk.dataset.price), cost: parseFloat(chk.dataset.cost) });
   });
+
+  if(erro){ alert(erro); return; }
+
   setProducts(products);
+  const total = itensDevolvidos.reduce((s,i)=>s+i.qty*i.price,0);
   const returns = getReturns();
-  returns.unshift({id:uid(), date:new Date().toISOString(), saleId:sid, items:itensDevolvidos.join(', '), reason:motivo});
+  returns.unshift({ id:uid(), date:new Date().toISOString(), saleId:sid, items:itensDevolvidos, total, reason:motivo });
   setReturns(returns);
+
   document.getElementById('d-motivo').value='';
   refreshReturnSelect();
   renderAll();
-  alert('Devolução registrada e estoque atualizado.');
+  alert('Devolução registrada, estoque atualizado e valor descontado do faturamento.');
 }
+
 function renderDevolucao(){
   refreshReturnSelect();
-  const returns = getReturns();
-  document.getElementById('tbl-devolucoes').innerHTML = returns.length ? returns.map(r=>`<tr>
-    <td>${new Date(r.date).toLocaleDateString('pt-BR')}</td><td>#${r.saleId.slice(-5)}</td><td>${r.items}</td><td>${r.reason}</td>
-  </tr>`).join('') : '<tr class="empty-row"><td colspan="4">Nenhuma devolução registrada ainda.</td></tr>';
+  const de = document.getElementById('dev-filtro-de').value;
+  const ate = document.getElementById('dev-filtro-ate').value;
+  let returns = getReturns();
+  if(de) returns = returns.filter(r => r.date.slice(0,10) >= de);
+  if(ate) returns = returns.filter(r => r.date.slice(0,10) <= ate);
+
+  const totalPeriodo = returns.reduce((s,r)=> s + (r.total ?? (r.items||[]).reduce((a,i)=>a+i.qty*i.price,0)), 0);
+  document.getElementById('dev-total-periodo').innerText = money(totalPeriodo);
+
+  document.getElementById('tbl-devolucoes').innerHTML = returns.length ? returns.map(r=>{
+    const itensTxt = Array.isArray(r.items) ? r.items.map(i=>`${i.qty}x ${i.name}`).join(', ') : (r.items || '');
+    const valor = r.total ?? (Array.isArray(r.items) ? r.items.reduce((a,i)=>a+i.qty*i.price,0) : 0);
+    return `<tr>
+    <td>${new Date(r.date).toLocaleDateString('pt-BR')}</td><td>#${r.saleId.slice(-5)}</td><td>${itensTxt}</td><td>${money(valor)}</td><td>${r.reason}</td>
+  </tr>`;
+  }).join('') : '<tr class="empty-row"><td colspan="5">Nenhuma devolução registrada nesse período.</td></tr>';
 }
 
 /* ============ Orçamentos ============ */
 let orcamentoCart = [];
+let _pendingConvertId = null;
 function getQuotes(){ return load('wm_quotes', []); }
 function setQuotes(l){ save('wm_quotes', l); }
 function refreshQuoteSelects(){
@@ -1889,24 +1998,61 @@ function addToOrcamento(){
   const p = getProducts().find(x=>x.id===pid);
   if(!p){ alert('Cadastre um produto primeiro.'); return; }
   const existing = orcamentoCart.find(i=>i.productId===pid);
-  if(existing){ existing.qty+=qty; } else { orcamentoCart.push({productId:pid, name:p.name, price:p.price, qty}); }
+  if(existing){ existing.qty+=qty; } else { orcamentoCart.push({productId:pid, name:p.name, price:p.price, cost:p.cost||0, qty}); }
   renderOrcamentoCart();
+}
+function getOrcamentoDiscount(subtotal){
+  const valor = parseFloat(document.getElementById('o-desconto-valor').value)||0;
+  const tipo = document.getElementById('o-desconto-tipo').value;
+  const desconto = tipo === 'percent' ? subtotal * (valor/100) : valor;
+  return Math.min(Math.max(desconto,0), subtotal);
 }
 function renderOrcamentoCart(){
   const el = document.getElementById('orcamento-list');
   el.innerHTML = orcamentoCart.length ? orcamentoCart.map(i=>`<div class="cart-item"><span>${i.qty}x ${i.name}</span><span>${money(i.price*i.qty)}</span></div>`).join('') : '<p style="color:var(--muted-2);font-size:12.5px;">Nenhum item adicionado.</p>';
-  document.getElementById('orcamento-total-val').innerText = money(orcamentoCart.reduce((s,i)=>s+i.price*i.qty,0));
+  const subtotal = orcamentoCart.reduce((s,i)=>s+i.price*i.qty,0);
+  const desconto = getOrcamentoDiscount(subtotal);
+  document.getElementById('orcamento-total-val').innerText = money(subtotal - desconto);
 }
+document.getElementById('o-desconto-valor').addEventListener('input', renderOrcamentoCart);
+document.getElementById('o-desconto-tipo').addEventListener('change', renderOrcamentoCart);
+
 function salvarOrcamento(){
   if(!orcamentoCart.length){ alert('Adicione ao menos um produto.'); return; }
-  const total = orcamentoCart.reduce((s,i)=>s+i.price*i.qty,0);
+  const subtotal = orcamentoCart.reduce((s,i)=>s+i.price*i.qty,0);
+  const discountValue = parseFloat(document.getElementById('o-desconto-valor').value)||0;
+  const discountType = document.getElementById('o-desconto-tipo').value;
+  const discount = getOrcamentoDiscount(subtotal);
+  const total = subtotal - discount;
   const quotes = getQuotes();
-  quotes.unshift({id:uid(), date:new Date().toISOString(), customerId:document.getElementById('o-cliente').value||null, items:orcamentoCart, total, status:'pendente'});
+  quotes.unshift({
+    id:uid(), date:new Date().toISOString(), customerId:document.getElementById('o-cliente').value||null,
+    items:orcamentoCart, subtotal, discountValue, discountType, discount, total, status:'pendente'
+  });
   setQuotes(quotes);
-  orcamentoCart = []; renderOrcamentoCart();
+  orcamentoCart = [];
+  document.getElementById('o-desconto-valor').value = 0;
+  renderOrcamentoCart();
   renderAll();
 }
-function converterOrcamento(id){
+
+/** Abre o modal pra escolher a forma de pagamento antes de converter. */
+function abrirConversao(id){
+  _pendingConvertId = id;
+  document.getElementById('convertOverlay').style.display = 'flex';
+}
+function fecharConversao(){
+  _pendingConvertId = null;
+  document.getElementById('convertOverlay').style.display = 'none';
+}
+function confirmarConversao(){
+  const payment = document.getElementById('convert-pagamento').value;
+  const id = _pendingConvertId;
+  fecharConversao();
+  if(id) converterOrcamento(id, payment);
+}
+
+function converterOrcamento(id, payment){
   const quotes = getQuotes();
   const q = quotes.find(x=>x.id===id);
   if(!q) return;
@@ -1915,13 +2061,29 @@ function converterOrcamento(id){
   if(!podeConverter){ alert('Estoque insuficiente para converter este orçamento em venda.'); return; }
   q.items.forEach(i=>{ products = products.map(p => p.id===i.productId ? {...p, qty:p.qty-i.qty} : p); });
   setProducts(products);
-  const sales = getSales();
-  sales.unshift({id:uid(), date:new Date().toISOString(), customerId:q.customerId, payment:'Convertido de orçamento', items:q.items.map(i=>({...i, cost:(getProducts().find(p=>p.id===i.productId)||{}).cost||0})), total:q.total});
-  setSales(sales);
+
+  const total = (q.total !== undefined) ? q.total : q.items.reduce((s,i)=>s+i.price*i.qty,0);
+  const sale = {
+    id: uid(), date: new Date().toISOString(), customerId: q.customerId,
+    payment: payment || 'Convertido de orçamento',
+    items: q.items.map(i=>({...i, cost:(getProducts().find(p=>p.id===i.productId)||{}).cost||0})),
+    total, fromQuoteId: q.id,
+    soldBy: (isApiMode() && currentAdmin) ? currentAdmin.email : null
+  };
+  const sales = getSales(); sales.unshift(sale); setSales(sales);
   setQuotes(quotes.map(x=>x.id===id?{...x,status:'convertido'}:x));
+
+  // registra no caixa do dia, se aberto — igual a uma venda manual.
+  const cx = load('wm_caixa', null);
+  if(cx && cx.open){
+    cx.entries.unshift({id:uid(), date:new Date().toISOString(), desc:'Venda #'+sale.id.slice(-5)+' (orçamento convertido)', type:'entrada', value:total, category:'Venda'});
+    save('wm_caixa', cx);
+  }
+
   renderAll();
   alert('Orçamento convertido em venda!');
 }
+
 function renderOrcamentos(){
   refreshQuoteSelects();
   const quotes = getQuotes();
@@ -1931,8 +2093,89 @@ function renderOrcamentos(){
     <td>${q.customerId ? (customers.find(c=>c.id===q.customerId)||{}).name||'—' : '—'}</td>
     <td>${money(q.total)}</td>
     <td>${q.status==='convertido' ? '<span class="tag ok">Convertido</span>' : '<span class="tag low">Pendente</span>'}</td>
-    <td>${q.status==='pendente' ? `<button class="icon-btn" onclick="converterOrcamento('${q.id}')" title="Converter em venda"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></button>` : ''}</td>
+    <td style="white-space:nowrap;">
+      ${q.status==='pendente' ? `<button class="icon-btn" onclick="abrirConversao('${q.id}')" title="Converter em venda"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></button>` : ''}
+      <button class="icon-btn" onclick="gerarPdfOrcamento('${q.id}')" title="Gerar PDF"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+    </td>
   </tr>`).join('') : '<tr class="empty-row"><td colspan="5">Nenhum orçamento salvo ainda.</td></tr>';
+}
+
+/** Abre uma janela com o orçamento formatado (logo, CNPJ, cliente, itens,
+ *  desconto e total) e chama o print do navegador — a pessoa escolhe
+ *  "Salvar como PDF" no destino da impressão, sem precisar de nenhuma
+ *  biblioteca extra no projeto. */
+function gerarPdfOrcamento(id){
+  const q = getQuotes().find(x=>x.id===id);
+  if(!q) return;
+  const company = load('wm_company', {});
+  const customers = getCustomers();
+  const cliente = q.customerId ? customers.find(c=>c.id===q.customerId) : null;
+  const dataStr = new Date(q.date).toLocaleDateString('pt-BR');
+  const validade = new Date(new Date(q.date).getTime() + 7*24*60*60*1000).toLocaleDateString('pt-BR');
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <html><head><title>Orçamento #${q.id.slice(-6)}</title>
+    <meta charset="utf-8">
+    <style>
+      * { box-sizing:border-box; }
+      body { font-family:Arial, sans-serif; color:#222; padding:40px; max-width:760px; margin:0 auto; }
+      .head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #222; padding-bottom:16px; margin-bottom:24px; }
+      .head img { max-height:70px; max-width:180px; object-fit:contain; }
+      .head h1 { font-size:20px; margin:0 0 4px; }
+      .head p { font-size:12px; margin:1px 0; color:#444; }
+      .titulo { text-align:center; margin:20px 0; }
+      .titulo h2 { font-size:16px; letter-spacing:1px; text-transform:uppercase; margin:0; }
+      .info-grid { display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:20px; }
+      table { width:100%; border-collapse:collapse; margin-top:10px; font-size:12.5px; }
+      th, td { border:1px solid #ccc; padding:8px 10px; text-align:left; }
+      th { background:#f2f2f2; }
+      .totals { margin-top:14px; width:100%; }
+      .totals td { border:none; padding:4px 10px; text-align:right; }
+      .totals .label { color:#555; }
+      .totals .final { font-size:15px; font-weight:bold; border-top:2px solid #222; }
+      .footer { margin-top:40px; font-size:11px; color:#777; text-align:center; border-top:1px solid #ddd; padding-top:14px; }
+      @media print { body { padding:15px; } }
+    </style>
+    </head><body>
+      <div class="head">
+        <div>
+          <h1>${company.name || 'Sua Empresa'}</h1>
+          ${company.razaoSocial ? `<p>${company.razaoSocial}</p>` : ''}
+          ${company.cnpj ? `<p>CNPJ: ${company.cnpj}</p>` : ''}
+          ${company.address ? `<p>${company.address}</p>` : ''}
+          ${company.phone ? `<p>Tel/WhatsApp: ${company.phone}</p>` : ''}
+          ${company.email ? `<p>${company.email}</p>` : ''}
+        </div>
+        ${company.logo ? `<img src="${company.logo}">` : ''}
+      </div>
+
+      <div class="titulo"><h2>Orçamento nº ${q.id.slice(-6).toUpperCase()}</h2></div>
+
+      <div class="info-grid">
+        <div><b>Cliente:</b> ${cliente ? cliente.name : 'Não informado'}${cliente && cliente.fone ? ' — ' + cliente.fone : ''}</div>
+        <div><b>Data:</b> ${dataStr} &nbsp;|&nbsp; <b>Válido até:</b> ${validade}</div>
+      </div>
+
+      <table>
+        <thead><tr><th>Produto</th><th>Qtd</th><th>Valor unit.</th><th>Subtotal</th></tr></thead>
+        <tbody>
+          ${q.items.map(i => `<tr><td>${i.name}</td><td>${i.qty}</td><td>${money(i.price)}</td><td>${money(i.price*i.qty)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+
+      <table class="totals">
+        <tr><td class="label">Subtotal</td><td>${money(q.subtotal ?? q.total)}</td></tr>
+        ${q.discount ? `<tr><td class="label">Desconto</td><td>- ${money(q.discount)}</td></tr>` : ''}
+        <tr class="final"><td>Total</td><td>${money(q.total)}</td></tr>
+      </table>
+
+      <div class="footer">Orçamento gerado por ${company.name || 'WM Móveis & Utilidades'} — válido por 7 dias a partir da data de emissão.</div>
+
+      <scr` + `ipt>window.onload = () => window.print();</scr` + `ipt>
+    </body></html>
+  `);
+  win.document.close();
 }
 
 /* ============ Fiado ============ */
@@ -2094,10 +2337,11 @@ function renderMetas(){
   const sales = getSales();
   document.getElementById('tbl-metas').innerHTML = goals.length ? goals.map(g=>{
     const [mm,yyyy] = g.month.split('/');
-    const faturado = sales.filter(s=>{
-      const d = new Date(s.date);
-      return mm && yyyy ? (String(d.getMonth()+1).padStart(2,'0')===mm && String(d.getFullYear())===yyyy) : false;
-    }).reduce((s,x)=>s+x.total,0);
+    const inMonth = d => mm && yyyy && String(d.getMonth()+1).padStart(2,'0')===mm && String(d.getFullYear())===yyyy;
+    const faturadoBruto = sales.filter(s=> inMonth(new Date(s.date))).reduce((s,x)=>s+x.total,0);
+    const devolvidoMes = getReturns().filter(r=> inMonth(new Date(r.date)))
+      .reduce((s,r)=> s + (r.total ?? (Array.isArray(r.items)?r.items.reduce((a,i)=>a+i.qty*i.price,0):0)), 0);
+    const faturado = faturadoBruto - devolvidoMes;
     const pct = g.value>0 ? (faturado/g.value*100) : 0;
     const status = pct>=100 ? '<span class="tag ok">Atingida</span>' : (pct>=70 ? '<span class="tag low">Em andamento</span>' : '<span class="tag out">Abaixo</span>');
     return `<tr><td>${g.month}</td><td>${money(g.value)}</td><td>${money(faturado)}</td><td>${pct.toFixed(0)}%</td><td>${status}</td></tr>`;
@@ -2112,6 +2356,8 @@ function saveCompany(){
     razaoSocial: document.getElementById('emp-razao').value.trim(),
     cnpj: document.getElementById('emp-cnpj').value.trim(),
     email: document.getElementById('emp-email').value.trim(),
+    phone: document.getElementById('emp-telefone').value.trim(),
+    address: document.getElementById('emp-endereco').value.trim(),
     logo: pendingLogo
   });
   alert('Dados da empresa salvos.');
@@ -2134,6 +2380,8 @@ function loadCompanyForm(){
   document.getElementById('emp-razao').value = c.razaoSocial||'';
   document.getElementById('emp-cnpj').value = c.cnpj||'';
   document.getElementById('emp-email').value = c.email||'';
+  document.getElementById('emp-telefone').value = c.phone||'';
+  document.getElementById('emp-endereco').value = c.address||'';
   if(c.logo){ pendingLogo = c.logo; document.getElementById('preview-logo-img').src = c.logo; document.getElementById('preview-logo').style.display='block'; }
 }
 function saveLoyalty(){
